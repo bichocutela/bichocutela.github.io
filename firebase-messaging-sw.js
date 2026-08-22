@@ -52,6 +52,7 @@ self.addEventListener("message", (event) => {
 });
 
 messaging.onBackgroundMessage(async (payload) => {
+  if (payload.notification) return;
   const preferences = await readPreferences();
   const type = payload.data?.type;
   if (!preferences.enabled || (type === "NEW_PRODUCT" && !preferences.productAdded) || (type === "CODE_CHANGED" && !preferences.codeChanged)) return;
@@ -66,9 +67,10 @@ messaging.onBackgroundMessage(async (payload) => {
 });
 
 self.addEventListener("notificationclick", (event) => {
+  if (!event.notification.data?.url && !event.notification.data?.productCode) return;
   event.notification.close();
   const productCode = event.notification.data?.productCode;
-  const target = productCode ? `/?product=${encodeURIComponent(productCode)}` : "/";
+  const target = event.notification.data?.url || (productCode ? `/?product=${encodeURIComponent(productCode)}` : "/");
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
       const existing = windows.find((windowClient) => new URL(windowClient.url).origin === self.location.origin);
