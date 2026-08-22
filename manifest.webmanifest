@@ -9,12 +9,10 @@
   "theme_color": "#c81e1e",
   "icons": [
     {
-      "src": "/manus-storage/247858_40459510.png",
+      "src": "/manus-storage/247858_40459510.png?v=original-transparent-v4",
       "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"
     }
-  ],
-  "scope": "/",
-  "id": "/"
+  ]
 }
