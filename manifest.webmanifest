@@ -1,0 +1,20 @@
+{
+  "name": "NRD Códigos",
+  "short_name": "NRD Códigos",
+  "description": "Consulta rápida de códigos correlatos para equipes de supermercado.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#c81e1e",
+  "icons": [
+    {
+      "src": "/manus-storage/247858_40459510.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "scope": "/",
+  "id": "/"
+}
