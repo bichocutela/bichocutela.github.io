@@ -17,6 +17,8 @@ const APP_SHELL = ["/", "/manifest.webmanifest"];
 const PREFERENCES_DB = "nrd-pwa-preferences";
 const PREFERENCES_STORE = "settings";
 const PREFERENCES_KEY = "notifications";
+const HISTORY_DB = "nrd-pwa-notification-history";
+const HISTORY_STORE = "entries";
 const defaultPreferences = { enabled: true, productAdded: true, codeChanged: true };
 
 const openPreferences = () => new Promise((resolve, reject) => {
@@ -49,6 +51,23 @@ const readPreferences = async () => {
   }
 };
 
+const saveNotificationHistory = async (payload) => {
+  const request = indexedDB.open(HISTORY_DB, 1);
+  const database = await new Promise((resolve, reject) => {
+    request.onupgradeneeded = () => request.result.createObjectStore(HISTORY_STORE, { keyPath: "id" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const data = payload.data || {};
+  const entry = { id: payload.messageId || crypto.randomUUID(), title: payload.notification?.title || data.title || "NRD Códigos", body: payload.notification?.body || data.body || "Há uma atualização no catálogo.", type: data.type || "NEW_PRODUCT", productCode: data.productCode || "", url: data.url || "", receivedAt: Date.now() };
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction(HISTORY_STORE, "readwrite");
+    transaction.objectStore(HISTORY_STORE).put(entry);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+};
+
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
   self.skipWaiting();
@@ -71,7 +90,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 messaging.onBackgroundMessage(async (payload) => {
-  if (payload.notification) return;
+  await saveNotificationHistory(payload).catch(() => undefined);
   const preferences = await readPreferences();
   const type = payload.data?.type;
   if (!preferences.enabled || (type === "NEW_PRODUCT" && !preferences.productAdded) || (type === "CODE_CHANGED" && !preferences.codeChanged)) return;
