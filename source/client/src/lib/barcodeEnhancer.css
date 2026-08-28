@@ -1,0 +1,23 @@
+.nrd-barcode i.nrd-barcode-real {
+  display: block;
+  width: 100%;
+  height: clamp(6.5rem, 26vw, 8.75rem);
+  margin-top: .35rem;
+  border-radius: .25rem;
+  background-color: #fff;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+  overflow: hidden;
+}
+
+.nrd-barcode i.nrd-barcode-real b {
+  display: none;
+}
+
+@media (max-width: 420px) {
+  .nrd-barcode i.nrd-barcode-real {
+    height: 7rem;
+  }
+}
