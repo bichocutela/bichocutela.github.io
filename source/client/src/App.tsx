@@ -1,4 +1,4 @@
-/** Catálogo em Movimento: ponto de entrada enxuto para consulta operacional mobile-first. */
+/** NRD Lojas PWA: experiência mobile alinhada ao aplicativo Android. */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
