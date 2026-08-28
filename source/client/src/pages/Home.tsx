@@ -1,9 +1,11 @@
 /** Catálogo em Movimento: wayfinding de varejo, foco na consulta e contraste garantido. */
 import { useEffect, useMemo, useState } from "react";
 import {
+  Apple,
   Bell,
   Check,
   ChevronRight,
+  Download,
   Heart,
   Menu,
   Mic,
@@ -26,6 +28,8 @@ import {
 const logoUrl = "/manus-storage/nrd-icon-original-user_0cf71537.png";
 const scanIllustrationUrl = "/manus-storage/nrd-pwa-barcode-backdrop_5b26df06.png";
 const installIllustrationUrl = "/manus-storage/nrd-pwa-install-illustration_6f898920.png";
+const iphonePwaUrl = "https://bichocutela.github.io";
+const androidApkUrl = "https://github.com/bichocutela/NRDLOJAS-v2/releases/latest/download/app-release.apk";
 
 const officialThemeBanners: Record<ThemeKey, string> = {
   multicolor: "/manus-storage/nrd-banner-multicolor-original_62abf744.jpg",
@@ -101,6 +105,7 @@ export default function Home() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
+  const [qrPlatform, setQrPlatform] = useState<"iphone" | "android" | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
@@ -290,13 +295,15 @@ export default function Home() {
         onClose={() => setDrawerOpen(false)}
         onOpenCategory={(category) => { setSelectedCategory(category); setDrawerOpen(false); }}
         onOpenSettings={() => { setSettingsOpen(true); setDrawerOpen(false); }}
-        onInstall={() => { setInstallOpen(true); setDrawerOpen(false); }}
+        onInstallIphone={() => { setQrPlatform("iphone"); setDrawerOpen(false); }}
+        onInstallAndroid={() => { setQrPlatform("android"); setDrawerOpen(false); }}
       />}
 
       {selectedCategory && <ProductModal title={selectedCategory} products={categoryProducts} favorites={favorites} onClose={() => setSelectedCategory(null)} onOpen={openProduct} onFavorite={toggleFavorite} />}
       {selectedProduct && <ProductDetail product={selectedProduct} favorite={favorites.includes(selectedProduct.code)} onClose={() => setSelectedProduct(null)} onFavorite={toggleFavorite} />}
       {settingsOpen && <PreferencesModal preferences={preferences} settingsReady={settingsReady} remoteLocked={settings.overrideLocalTheme} remoteTheme={settings.theme} onChange={setPreferences} onClose={() => setSettingsOpen(false)} />}
       {installOpen && <InstallModal onInstall={installPwa} onClose={() => setInstallOpen(false)} />}
+      {qrPlatform && <QrInstallModal platform={qrPlatform} onInstallPwa={installPwa} onClose={() => setQrPlatform(null)} />}
     </main>
   );
 }
@@ -327,8 +334,8 @@ function EmptySearch({ onReset }: { onReset: () => void }) {
   return <div className="nrd-empty"><Search size={30} /><strong>Nenhum produto encontrado</strong><span>Tente parte do nome, a categoria ou confira o código.</span><button onClick={onReset}>Limpar busca</button></div>;
 }
 
-function NavigationDrawer({ categories, onClose, onOpenCategory, onOpenSettings, onInstall }: { categories: { id: string; name: string }[]; onClose: () => void; onOpenCategory: (category: string) => void; onOpenSettings: () => void; onInstall: () => void }) {
-  return <div className="nrd-overlay" role="presentation" onMouseDown={onClose}><aside className="nrd-drawer" role="dialog" aria-label="Navegação" onMouseDown={(event) => event.stopPropagation()}><header><img src={logoUrl} alt="" /><button onClick={onClose} aria-label="Fechar menu"><X /></button></header><p className="nrd-drawer-eyebrow">Navegação</p><button className="nrd-drawer-link" onClick={onClose}><Monitor size={17} /> Início</button>{categories.map((category) => <button key={category.id} className="nrd-drawer-link" onClick={() => onOpenCategory(category.name)}><span className="nrd-drawer-dot" />{category.name}<ChevronRight size={15} /></button>)}<div className="nrd-drawer-divider" /><button className="nrd-drawer-link" onClick={onOpenSettings}><Settings2 size={17} /> Configurações</button><button className="nrd-drawer-link" onClick={onInstall}><Smartphone size={17} /> Instalar no dispositivo</button></aside></div>;
+function NavigationDrawer({ categories, onClose, onOpenCategory, onOpenSettings, onInstallIphone, onInstallAndroid }: { categories: { id: string; name: string }[]; onClose: () => void; onOpenCategory: (category: string) => void; onOpenSettings: () => void; onInstallIphone: () => void; onInstallAndroid: () => void }) {
+  return <div className="nrd-overlay" role="presentation" onMouseDown={onClose}><aside className="nrd-drawer" role="dialog" aria-label="Navegação" onMouseDown={(event) => event.stopPropagation()}><header><img src={logoUrl} alt="" /><button onClick={onClose} aria-label="Fechar menu"><X /></button></header><p className="nrd-drawer-eyebrow">Navegação</p><button className="nrd-drawer-link" onClick={onClose}><Monitor size={17} /> Início</button>{categories.map((category) => <button key={category.id} className="nrd-drawer-link" onClick={() => onOpenCategory(category.name)}><span className="nrd-drawer-dot" />{category.name}<ChevronRight size={15} /></button>)}<div className="nrd-drawer-divider" /><button className="nrd-drawer-link" onClick={onOpenSettings}><Settings2 size={17} /> Configurações</button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallIphone}><Apple size={17} /> Instalar via iPhone<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallAndroid}><Smartphone size={17} /> Instalar via Android<ChevronRight size={15} /></button></aside></div>;
 }
 
 function ProductModal({ title, products, favorites, onClose, onOpen, onFavorite }: { title: string; products: Product[]; favorites: string[]; onClose: () => void; onOpen: (product: Product) => void; onFavorite: (code: string) => void }) {
@@ -345,4 +352,15 @@ function PreferencesModal({ preferences, settingsReady, remoteLocked, remoteThem
 
 function InstallModal({ onInstall, onClose }: { onInstall: () => void; onClose: () => void }) {
   return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--install" role="dialog" aria-modal="true" aria-label="Instalar NRD Códigos" onMouseDown={(event) => event.stopPropagation()}><button className="nrd-modal-close" onClick={onClose} aria-label="Fechar"><X /></button><img src={installIllustrationUrl} alt="Ilustração de instalação do aplicativo" /><p>Disponível como aplicativo</p><h2>Leve a consulta para a tela inicial.</h2><span>No Android, confirme a instalação quando o navegador solicitar. No iPhone, use Compartilhar e “Adicionar à Tela de Início”.</span><button onClick={onInstall}><Smartphone size={18} /> Instalar neste dispositivo</button></section></div>;
+}
+
+function QrInstallModal({ platform, onInstallPwa, onClose }: { platform: "iphone" | "android"; onInstallPwa: () => void; onClose: () => void }) {
+  const isIphone = platform === "iphone";
+  const targetUrl = isIphone ? iphonePwaUrl : androidApkUrl;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=16&data=${encodeURIComponent(targetUrl)}`;
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(targetUrl);
+    toast.success("Link copiado!");
+  };
+  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--qr" role="dialog" aria-modal="true" aria-label={`Instalar via ${isIphone ? "iPhone" : "Android"}`} onMouseDown={(event) => event.stopPropagation()}><button className="nrd-modal-close" onClick={onClose} aria-label="Fechar"><X /></button><div className="nrd-qr-platform">{isIphone ? <Apple size={22} /> : <Smartphone size={22} />}<span>Instalar via {isIphone ? "iPhone" : "Android"}</span></div><h2>{isIphone ? "NRD Códigos para iPhone" : "NRD Códigos para Android"}</h2><img className="nrd-qr-image" src={qrUrl} alt={`QR Code para instalar no ${isIphone ? "iPhone" : "Android"}`} /><p>{isIphone ? "Escaneie no iPhone, abra no Safari, toque em Compartilhar e depois em Adicionar à Tela de Início." : "Escaneie para baixar e instalar a versão Android mais recente."}</p><div className="nrd-qr-actions"><button className="nrd-qr-copy" onClick={copyLink}>Copiar link</button>{isIphone ? <button className="nrd-qr-primary" onClick={onInstallPwa}><Apple size={17} /> Instalar neste iPhone</button> : <a className="nrd-qr-primary" href={androidApkUrl}><Download size={17} /> Baixar APK</a>}</div></section></div>;
 }
