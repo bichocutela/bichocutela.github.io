@@ -19,6 +19,12 @@ import {
 import { toast } from "sonner";
 import { useNrdCatalog } from "@/hooks/useNrdData";
 import {
+  listNotificationHistory,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NrdNotification,
+} from "@/lib/notificationHistory";
+import {
   activeBackgroundFor,
   normalizeSearch,
   type Product,
@@ -106,6 +112,8 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [qrPlatform, setQrPlatform] = useState<"iphone" | "android" | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NrdNotification[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
@@ -117,6 +125,27 @@ export default function Home() {
     };
     window.addEventListener("beforeinstallprompt", captureInstallPrompt);
     return () => window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
+  }, []);
+
+  async function refreshNotifications() {
+    try {
+      setNotifications(await listNotificationHistory());
+    } catch {
+      setNotifications([]);
+    }
+  }
+
+  useEffect(() => {
+    void refreshNotifications();
+    const update = () => void refreshNotifications();
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", update);
+    navigator.serviceWorker?.addEventListener("message", update);
+    return () => {
+      window.removeEventListener("focus", update);
+      document.removeEventListener("visibilitychange", update);
+      navigator.serviceWorker?.removeEventListener("message", update);
+    };
   }, []);
 
   const effectiveTheme = settings.overrideLocalTheme ? settings.theme : preferences.theme;
@@ -170,6 +199,29 @@ export default function Home() {
     setFavorites((current) => current.includes(code) ? current.filter((item) => item !== code) : [code, ...current]);
   }
 
+  async function openNotification(notification: NrdNotification) {
+    await markNotificationRead(notification.id);
+    await refreshNotifications();
+    const notificationTarget = normalizeSearch(notification.body);
+    const product = products.find((item) => item.code === notification.productCode)
+      ?? products.find((item) => item.code === notification.body.trim())
+      ?? products.find((item) => normalizeSearch(item.name) === notificationTarget)
+      ?? products.find((item) => normalizeSearch(item.name).includes(notificationTarget));
+    if (product) {
+      openProduct(product);
+      setNotificationsOpen(false);
+    } else if (notification.url) {
+      window.location.assign(notification.url);
+    } else {
+      toast.message("A notificação foi marcada como lida.");
+    }
+  }
+
+  async function readAllNotifications() {
+    await markAllNotificationsRead();
+    await refreshNotifications();
+  }
+
   async function startVoiceSearch() {
     const speechWindow = window as Window & typeof globalThis & {
       SpeechRecognition?: BrowserSpeechRecognitionConstructor;
@@ -213,8 +265,8 @@ export default function Home() {
           <button className="nrd-icon-button" onClick={() => setDrawerOpen(true)} aria-label="Abrir menu">
             <Menu size={22} />
           </button>
-          <button className="nrd-icon-button" onClick={() => toast.message("Você está em dia. Nenhuma notificação nova.")} aria-label="Abrir notificações">
-            <Bell size={21} />
+          <button className="nrd-icon-button nrd-notification-button" onClick={() => { void refreshNotifications(); setNotificationsOpen(true); }} aria-label="Abrir notificações">
+            <Bell size={21} />{notifications.filter((item) => !item.read).length > 0 && <span>{notifications.filter((item) => !item.read).length}</span>}
           </button>
         </div>
       </header>
@@ -304,6 +356,7 @@ export default function Home() {
       {settingsOpen && <PreferencesModal preferences={preferences} settingsReady={settingsReady} remoteLocked={settings.overrideLocalTheme} remoteTheme={settings.theme} onChange={setPreferences} onClose={() => setSettingsOpen(false)} />}
       {installOpen && <InstallModal onInstall={installPwa} onClose={() => setInstallOpen(false)} />}
       {qrPlatform && <QrInstallModal platform={qrPlatform} onInstallPwa={installPwa} onClose={() => setQrPlatform(null)} />}
+      {notificationsOpen && <NotificationsModal notifications={notifications} onOpen={openNotification} onReadAll={readAllNotifications} onClose={() => setNotificationsOpen(false)} />}
     </main>
   );
 }
@@ -363,4 +416,13 @@ function QrInstallModal({ platform, onInstallPwa, onClose }: { platform: "iphone
     toast.success("Link copiado!");
   };
   return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--qr" role="dialog" aria-modal="true" aria-label={`Instalar via ${isIphone ? "iPhone" : "Android"}`} onMouseDown={(event) => event.stopPropagation()}><button className="nrd-modal-close" onClick={onClose} aria-label="Fechar"><X /></button><div className="nrd-qr-platform">{isIphone ? <Apple size={22} /> : <Smartphone size={22} />}<span>Instalar via {isIphone ? "iPhone" : "Android"}</span></div><h2>{isIphone ? "NRD Códigos para iPhone" : "NRD Códigos para Android"}</h2><img className="nrd-qr-image" src={qrUrl} alt={`QR Code para instalar no ${isIphone ? "iPhone" : "Android"}`} /><p>{isIphone ? "Escaneie no iPhone, abra no Safari, toque em Compartilhar e depois em Adicionar à Tela de Início." : "Escaneie para baixar e instalar a versão Android mais recente."}</p><div className="nrd-qr-actions"><button className="nrd-qr-copy" onClick={copyLink}>Copiar link</button>{isIphone ? <button className="nrd-qr-primary" onClick={onInstallPwa}><Apple size={17} /> Instalar neste iPhone</button> : <a className="nrd-qr-primary" href={androidApkUrl}><Download size={17} /> Baixar APK</a>}</div></section></div>;
+}
+
+function NotificationsModal({ notifications, onOpen, onReadAll, onClose }: { notifications: NrdNotification[]; onOpen: (notification: NrdNotification) => void; onReadAll: () => void; onClose: () => void }) {
+  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--notifications" role="dialog" aria-modal="true" aria-label="Notificações" onMouseDown={(event) => event.stopPropagation()}><header><div><p>Central de avisos</p><h2>Notificações</h2></div><button onClick={onClose} aria-label="Fechar"><X /></button></header><div className="nrd-notification-toolbar"><span>{notifications.filter((item) => !item.read).length} não lida{notifications.filter((item) => !item.read).length === 1 ? "" : "s"}</span>{notifications.some((item) => !item.read) && <button onClick={onReadAll}>Marcar todas como lidas</button>}</div>{notifications.length ? <div className="nrd-notification-list">{notifications.map((notification) => <button key={notification.id} className={`nrd-notification-item ${notification.read ? "is-read" : "is-unread"}`} onClick={() => onOpen(notification)}><span className="nrd-notification-dot" /><span className="nrd-notification-copy"><strong>{notification.title}</strong><span>{notification.body}</span><small>{notification.type === "CODE_CHANGED" ? "CÓDIGO ALTERADO" : "NOVO PRODUTO"} · {formatNotificationTime(notification.receivedAt)}</small></span><ChevronRight size={18} /></button>)}</div> : <div className="nrd-notification-empty"><Bell size={32} /><strong>Você está em dia</strong><span>Nenhuma notificação recebida neste dispositivo.</span></div>}</section></div>;
+}
+
+function formatNotificationTime(value: number) {
+  if (!value) return "agora";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(value);
 }
