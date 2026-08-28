@@ -24,6 +24,62 @@
   font-weight: 800;
 }
 
+.nrd-promo-store-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .45rem;
+  min-width: 0;
+}
+
+.nrd-promo-store-control select {
+  min-width: 0;
+  width: 100%;
+}
+
+.nrd-promo-store-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  min-height: 2.7rem;
+  border: 1px solid #d9e2d8;
+  border-radius: .7rem;
+  padding: .5rem .65rem;
+  background: #fff;
+  color: #627769;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.nrd-promo-store-control button.is-favorite-store {
+  border-color: #d9b51e;
+  background: #fff8d9;
+  color: #9a7410;
+}
+
+.nrd-promo-store-control button:disabled {
+  opacity: .45;
+}
+
+.nrd-promo-favorite-store-note {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  margin: -.15rem 0 .85rem;
+  border: 1px solid #eadb8d;
+  border-radius: .75rem;
+  padding: .65rem .75rem;
+  background: #fff9df;
+  color: #6e5a17;
+  font-size: .78rem;
+  line-height: 1.35;
+}
+
+.nrd-promo-favorite-store-note svg {
+  flex: 0 0 auto;
+  color: #c59612;
+}
+
 .nrd-promo-category-back {
   display: inline-flex;
   align-items: center;
@@ -143,17 +199,26 @@
 
 @media (min-width: 720px) {
   .nrd-promo-toolbar {
-    grid-template-columns: minmax(15rem, 1fr) minmax(12rem, .7fr);
+    grid-template-columns: minmax(15rem, 1fr) minmax(18rem, 1fr);
   }
 }
 
 @media (min-width: 1040px) {
   .nrd-promo-toolbar {
-    grid-template-columns: minmax(15rem, 1fr) 14rem 13rem 8rem;
+    grid-template-columns: minmax(15rem, 1fr) minmax(19rem, 1.1fr) 13rem 8rem;
   }
 }
 
 @media (max-width: 520px) {
+  .nrd-promo-store-control button span {
+    display: none;
+  }
+
+  .nrd-promo-store-control button {
+    width: 2.8rem;
+    padding: .5rem;
+  }
+
   .nrd-promo-pagination {
     grid-template-columns: 1fr 1fr;
   }
