@@ -34,13 +34,13 @@ function code128Values(value: string): number[] | null {
   }
 
   // Fallback Code B para referências alfanuméricas/numéricas ímpares.
-  if (![...value].every((character) => {
+  if (!value.split("").every((character) => {
     const code = character.charCodeAt(0);
     return code >= 32 && code <= 126;
   })) return null;
 
   const values = [104]; // START B
-  for (const character of value) values.push(character.charCodeAt(0) - 32);
+  for (let index = 0; index < value.length; index += 1) values.push(value.charCodeAt(index) - 32);
   let checksum = values[0];
   for (let index = 1; index < values.length; index += 1) checksum += values[index] * index;
   values.push(checksum % 103, 106);
@@ -49,7 +49,7 @@ function code128Values(value: string): number[] | null {
 
 function barsFromWidths(widthPatterns: readonly string[]) {
   const moduleCount = widthPatterns.reduce(
-    (total, pattern) => total + [...pattern].reduce((sum, width) => sum + Number(width), 0),
+    (total, pattern) => total + pattern.split("").reduce((sum, width) => sum + Number(width), 0),
     0,
   );
   const totalModules = moduleCount + QUIET_ZONE_MODULES * 2;
@@ -58,7 +58,7 @@ function barsFromWidths(widthPatterns: readonly string[]) {
   const rects: string[] = [];
 
   widthPatterns.forEach((pattern) => {
-    [...pattern].forEach((width, index) => {
+    pattern.split("").forEach((width, index) => {
       const modules = Number(width);
       if (index % 2 === 0) {
         rects.push(`<rect x="${(moduleX * moduleWidth).toFixed(3)}" y="0" width="${(modules * moduleWidth).toFixed(3)}" height="${SVG_HEIGHT}" fill="#000"/>`);
@@ -80,7 +80,7 @@ function code128Svg(value: string) {
 
 function validEan13(value: string) {
   if (!/^\d{13}$/.test(value)) return false;
-  const digits = [...value].map(Number);
+  const digits = value.split("").map(Number);
   const sum = digits.slice(0, 12).reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 1 : 3), 0);
   return (10 - (sum % 10)) % 10 === digits[12];
 }
