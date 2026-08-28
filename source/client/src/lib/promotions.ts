@@ -1,7 +1,5 @@
 const API_BASE = "https://app.nordestao.com.br/nossa-gente/v1";
-const REQUEST_TIMEOUT_MS = 12000;
-const MAX_RESPONSE_BYTES = 2_000_000;
-const MAX_PROMOTION_OFFERS = 40;
+const REQUEST_TIMEOUT_MS = 20000;
 
 export type PromotionOffer = {
   id: string;
@@ -69,22 +67,22 @@ export function parsePromotions(raw: unknown): PromotionOffer[] {
   if (!Array.isArray(candidate)) return [];
 
   const offers: PromotionOffer[] = [];
-  for (let index = 0; index < candidate.length && offers.length < MAX_PROMOTION_OFFERS; index += 1) {
-    const entry = candidate[index];
-    if (!entry || typeof entry !== "object") continue;
+  candidate.forEach((entry, index) => {
+    if (!entry || typeof entry !== "object") return;
     const item = entry as Record<string, unknown>;
     const children = ["produtos", "products", "itens", "ofertas"].map((key) => item[key]).find(Array.isArray);
 
     if (Array.isArray(children)) {
       const defaults = offerFrom(item, index);
-      for (let childIndex = 0; childIndex < children.length && offers.length < MAX_PROMOTION_OFFERS; childIndex += 1) {
-        const child = children[childIndex];
-        if (child && typeof child === "object") offers.push(offerFrom(child as Record<string, unknown>, childIndex, defaults));
-      }
+      children.forEach((child, childIndex) => {
+        if (child && typeof child === "object") {
+          offers.push(offerFrom(child as Record<string, unknown>, childIndex, defaults));
+        }
+      });
     } else {
       offers.push(offerFrom(item, index));
     }
-  }
+  });
 
   return offers;
 }
@@ -106,17 +104,7 @@ async function apiRequest(path: string, init: RequestInit) {
       },
     });
 
-    const declaredSize = Number(response.headers.get("content-length") || "0");
-    if (declaredSize > MAX_RESPONSE_BYTES) {
-      throw new Error("A resposta de promoções ficou grande demais para este dispositivo.");
-    }
-
-    const rawBody = await response.text();
-    if (rawBody.length > MAX_RESPONSE_BYTES) {
-      throw new Error("A resposta de promoções ficou grande demais para este dispositivo.");
-    }
-
-    const body = rawBody ? JSON.parse(rawBody) : null;
+    const body = await response.json().catch(() => null);
     if (!response.ok) {
       throw new Error(
         response.status === 401 || response.status === 403
@@ -128,9 +116,6 @@ async function apiRequest(path: string, init: RequestInit) {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("O Nossa Gente demorou demais para responder. Tente novamente.");
-    }
-    if (error instanceof SyntaxError) {
-      throw new Error("O Nossa Gente retornou uma resposta inválida.");
     }
     throw error;
   } finally {
