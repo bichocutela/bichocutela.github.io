@@ -14,8 +14,10 @@ import {
   Settings2,
   Smartphone,
   Sparkles,
+  Tags,
   X,
 } from "lucide-react";
+import PromotionsModal from "@/pages/PromotionsModal";
 import { toast } from "sonner";
 import { useNrdCatalog } from "@/hooks/useNrdData";
 import {
@@ -110,6 +112,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [promotionsOpen, setPromotionsOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [qrPlatform, setQrPlatform] = useState<"iphone" | "android" | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -346,6 +349,7 @@ export default function Home() {
         categories={activeCategories}
         onClose={() => setDrawerOpen(false)}
         onOpenCategory={(category) => { setSelectedCategory(category); setDrawerOpen(false); }}
+        onOpenPromotions={() => { setPromotionsOpen(true); setDrawerOpen(false); }}
         onOpenSettings={() => { setSettingsOpen(true); setDrawerOpen(false); }}
         onInstallIphone={() => { setQrPlatform("iphone"); setDrawerOpen(false); }}
         onInstallAndroid={() => { setQrPlatform("android"); setDrawerOpen(false); }}
@@ -357,6 +361,7 @@ export default function Home() {
       {installOpen && <InstallModal onInstall={installPwa} onClose={() => setInstallOpen(false)} />}
       {qrPlatform && <QrInstallModal platform={qrPlatform} onInstallPwa={installPwa} onClose={() => setQrPlatform(null)} />}
       {notificationsOpen && <NotificationsModal notifications={notifications} onOpen={openNotification} onReadAll={readAllNotifications} onClose={() => setNotificationsOpen(false)} />}
+      {promotionsOpen && <PromotionsModal onClose={() => setPromotionsOpen(false)} />}
     </main>
   );
 }
@@ -387,8 +392,8 @@ function EmptySearch({ onReset }: { onReset: () => void }) {
   return <div className="nrd-empty"><Search size={30} /><strong>Nenhum produto encontrado</strong><span>Tente parte do nome, a categoria ou confira o código.</span><button onClick={onReset}>Limpar busca</button></div>;
 }
 
-function NavigationDrawer({ categories, onClose, onOpenCategory, onOpenSettings, onInstallIphone, onInstallAndroid }: { categories: { id: string; name: string }[]; onClose: () => void; onOpenCategory: (category: string) => void; onOpenSettings: () => void; onInstallIphone: () => void; onInstallAndroid: () => void }) {
-  return <div className="nrd-overlay" role="presentation" onMouseDown={onClose}><aside className="nrd-drawer" role="dialog" aria-label="Navegação" onMouseDown={(event) => event.stopPropagation()}><header><img src={logoUrl} alt="" /><button onClick={onClose} aria-label="Fechar menu"><X /></button></header><p className="nrd-drawer-eyebrow">Navegação</p><button className="nrd-drawer-link" onClick={onClose}><Monitor size={17} /> Início</button>{categories.map((category) => <button key={category.id} className="nrd-drawer-link" onClick={() => onOpenCategory(category.name)}><span className="nrd-drawer-dot" />{category.name}<ChevronRight size={15} /></button>)}<div className="nrd-drawer-divider" /><button className="nrd-drawer-link" onClick={onOpenSettings}><Settings2 size={17} /> Configurações</button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallIphone}><Apple size={17} /> Instalar via iPhone<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallAndroid}><Smartphone size={17} /> Instalar via Android<ChevronRight size={15} /></button></aside></div>;
+function NavigationDrawer({ categories, onClose, onOpenCategory, onOpenPromotions, onOpenSettings, onInstallIphone, onInstallAndroid }: { categories: { id: string; name: string }[]; onClose: () => void; onOpenCategory: (category: string) => void; onOpenPromotions: () => void; onOpenSettings: () => void; onInstallIphone: () => void; onInstallAndroid: () => void }) {
+  return <div className="nrd-overlay" role="presentation" onMouseDown={onClose}><aside className="nrd-drawer" role="dialog" aria-label="Navegação" onMouseDown={(event) => event.stopPropagation()}><header><img src={logoUrl} alt="" /><button onClick={onClose} aria-label="Fechar menu"><X /></button></header><p className="nrd-drawer-eyebrow">Navegação</p><button className="nrd-drawer-link" onClick={onClose}><Monitor size={17} /> Início</button>{categories.map((category) => <button key={category.id} className="nrd-drawer-link" onClick={() => onOpenCategory(category.name)}><span className="nrd-drawer-dot" />{category.name}<ChevronRight size={15} /></button>)}<div className="nrd-drawer-divider" /><button className="nrd-drawer-link" onClick={onOpenPromotions}><Tags size={17} /> Promoções<ChevronRight size={15} /></button><button className="nrd-drawer-link" onClick={onOpenSettings}><Settings2 size={17} /> Configurações</button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallIphone}><Apple size={17} /> Instalar via iPhone<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallAndroid}><Smartphone size={17} /> Instalar via Android<ChevronRight size={15} /></button></aside></div>;
 }
 
 function ProductModal({ title, products, favorites, onClose, onOpen, onFavorite }: { title: string; products: Product[]; favorites: string[]; onClose: () => void; onOpen: (product: Product) => void; onFavorite: (code: string) => void }) {
