@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import "./pages/PromotionsModal.css";
+import "./lib/barcodeEnhancer.css";
+import "./lib/barcodeEnhancer";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
