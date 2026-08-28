@@ -12,7 +12,7 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const CACHE_NAME = "nrd-codigos-shell-v7";
+const CACHE_NAME = "nrd-codigos-shell-v8";
 const APP_SHELL = ["/", "/manifest.webmanifest"];
 const PREFERENCES_DB = "nrd-pwa-preferences";
 const PREFERENCES_STORE = "settings";
@@ -59,10 +59,31 @@ const saveNotificationHistory = async (payload) => {
     request.onerror = () => reject(request.error);
   });
   const data = payload.data || {};
-  const entry = { id: payload.messageId || crypto.randomUUID(), title: payload.notification?.title || data.title || "NRD Códigos", body: payload.notification?.body || data.body || "Há uma atualização no catálogo.", type: data.type || "NEW_PRODUCT", productCode: data.productCode || "", url: data.url || "", receivedAt: Date.now() };
+  const entry = { id: payload.messageId || crypto.randomUUID(), title: payload.notification?.title || data.title || "NRD Códigos", body: payload.notification?.body || data.body || "Há uma atualização no catálogo.", type: data.type || "NEW_PRODUCT", productCode: data.productCode || "", url: data.url || "", receivedAt: Date.now(), read: false };
   await new Promise((resolve, reject) => {
     const transaction = database.transaction(HISTORY_STORE, "readwrite");
     transaction.objectStore(HISTORY_STORE).put(entry);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  windows.forEach((client) => client.postMessage({ type: "NRD_NOTIFICATION_UPDATED" }));
+  return entry;
+};
+
+const markNotificationAsRead = async (id) => {
+  if (!id) return;
+  const request = indexedDB.open(HISTORY_DB, 1);
+  const database = await new Promise((resolve, reject) => {
+    request.onupgradeneeded = () => request.result.createObjectStore(HISTORY_STORE, { keyPath: "id" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction(HISTORY_STORE, "readwrite");
+    const store = transaction.objectStore(HISTORY_STORE);
+    const getRequest = store.get(id);
+    getRequest.onsuccess = () => { if (getRequest.result) store.put({ ...getRequest.result, read: true }); };
     transaction.oncomplete = resolve;
     transaction.onerror = () => reject(transaction.error);
   });
@@ -90,7 +111,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 messaging.onBackgroundMessage(async (payload) => {
-  await saveNotificationHistory(payload).catch(() => undefined);
+  const historyEntry = await saveNotificationHistory(payload).catch(() => undefined);
   const preferences = await readPreferences();
   const type = payload.data?.type;
   if (!preferences.enabled || (type === "NEW_PRODUCT" && !preferences.productAdded) || (type === "CODE_CHANGED" && !preferences.codeChanged)) return;
@@ -100,7 +121,7 @@ messaging.onBackgroundMessage(async (payload) => {
     body,
     icon: "/manus-storage/247858_40459510.png",
     badge: "/manus-storage/247858_40459510.png",
-    data: payload.data || {},
+    data: { ...(payload.data || {}), notificationId: historyEntry?.id || payload.messageId || "" },
   });
 });
 
@@ -110,7 +131,7 @@ self.addEventListener("notificationclick", (event) => {
   const productCode = event.notification.data?.productCode;
   const target = event.notification.data?.url || (productCode ? `/?product=${encodeURIComponent(productCode)}` : "/");
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+    markNotificationAsRead(event.notification.data?.notificationId).then(() => clients.matchAll({ type: "window", includeUncontrolled: true })).then((windows) => {
       const existing = windows.find((windowClient) => new URL(windowClient.url).origin === self.location.origin);
       if (existing) return existing.navigate(target).then(() => existing.focus());
       return clients.openWindow(target);
