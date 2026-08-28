@@ -6,10 +6,55 @@ import {
   storeLabelFor,
   storeNameFor,
   type PromotionOffer,
+  type PromotionStoreOffer,
 } from "@/lib/promotions";
 
 const PAGE_SIZE = 12;
+const CATEGORY_PREVIEW_LIMIT = 3;
 const ALL_STORES = "__all_stores__";
+
+type SortOption = "recent" | "priceAsc" | "discountDesc";
+
+function numericPrice(value: string) {
+  const normalized = value
+    .replace(/R\$/gi, "")
+    .replace(/\s+/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
+
+function numericDiscount(value: string) {
+  const parsed = Number(value.replace(/[^0-9,.-]/g, "").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : -1;
+}
+
+function storeOfferForSort(offer: PromotionOffer, selectedStore: string): PromotionStoreOffer | undefined {
+  if (selectedStore !== ALL_STORES) {
+    return offer.stores.find((item) => item.storeCode === selectedStore) ?? offer.stores[0];
+  }
+
+  return offer.stores.reduce<PromotionStoreOffer | undefined>((best, current) => {
+    if (!best) return current;
+    return numericPrice(current.offerPrice) < numericPrice(best.offerPrice) ? current : best;
+  }, undefined);
+}
+
+function sortOffers(items: PromotionOffer[], selectedStore: string, sortOption: SortOption) {
+  if (sortOption === "recent") return items;
+
+  return [...items].sort((a, b) => {
+    const storeA = storeOfferForSort(a, selectedStore);
+    const storeB = storeOfferForSort(b, selectedStore);
+
+    if (sortOption === "priceAsc") {
+      return numericPrice(storeA?.offerPrice ?? "") - numericPrice(storeB?.offerPrice ?? "");
+    }
+
+    return numericDiscount(storeB?.discount ?? "") - numericDiscount(storeA?.discount ?? "");
+  });
+}
 
 function PromotionCard({
   offer,
@@ -46,7 +91,7 @@ function PromotionCard({
         <h3>{offer.name}</h3>
         {offer.code && <p>Código {offer.code}</p>}
 
-        {currentStore && (
+        {currentStore && offer.stores.length > 1 && (
           <label className="nrd-promo-store-picker">
             <span><Store size={14} /> Preço na loja</span>
             <select value={currentStore.storeCode} onChange={(event) => setPickedStore(event.target.value)}>
@@ -95,6 +140,8 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
   const [offers, setOffers] = useState<PromotionOffer[]>([]);
   const [query, setQuery] = useState("");
   const [store, setStore] = useState(ALL_STORES);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sortOption, setSortOption] = useState<SortOption>("recent");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
@@ -146,7 +193,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     setPage(1);
-  }, [query, store, favoritesOnly]);
+  }, [query, store, selectedCategory, sortOption, favoritesOnly]);
 
   const stores = useMemo(() => (
     Array.from(new Set(offers.flatMap((offer) => offer.stores.map((item) => item.storeCode))))
@@ -154,22 +201,43 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
       .sort((a, b) => storeNameFor(a).localeCompare(storeNameFor(b), "pt-BR"))
   ), [offers]);
 
-  const visible = useMemo(() => {
+  const filteredBase = useMemo(() => {
     const term = query.trim().toLocaleLowerCase("pt-BR");
-    return offers
-      .filter((offer) => {
-        const matchesStore = store === ALL_STORES || offer.stores.some((item) => item.storeCode === store);
-        const matchesFavorite = !favoritesOnly || favorites.includes(offer.code);
-        const searchable = `${offer.name} ${offer.code} ${offer.category}`.toLocaleLowerCase("pt-BR");
-        return matchesStore && matchesFavorite && (!term || searchable.includes(term));
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    return offers.filter((offer) => {
+      const matchesStore = store === ALL_STORES || offer.stores.some((item) => item.storeCode === store);
+      const matchesFavorite = !favoritesOnly || favorites.includes(offer.code);
+      const searchable = `${offer.name} ${offer.code} ${offer.category}`.toLocaleLowerCase("pt-BR");
+      return matchesStore && matchesFavorite && (!term || searchable.includes(term));
+    });
   }, [offers, query, store, favoritesOnly, favorites]);
+
+  const categoryGroups = useMemo(() => {
+    if (store === ALL_STORES || selectedCategory) return [] as Array<[string, PromotionOffer[]]>;
+    const grouped = new Map<string, PromotionOffer[]>();
+    filteredBase.forEach((offer) => {
+      const category = offer.category.trim() || "Outras ofertas";
+      const current = grouped.get(category) ?? [];
+      current.push(offer);
+      grouped.set(category, current);
+    });
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b, "pt-BR"))
+      .map(([category, items]) => [category, sortOffers(items, store, sortOption)] as [string, PromotionOffer[]]);
+  }, [filteredBase, store, selectedCategory, sortOption]);
+
+  const visible = useMemo(() => {
+    const categoryFiltered = selectedCategory
+      ? filteredBase.filter((offer) => (offer.category.trim() || "Outras ofertas") === selectedCategory)
+      : filteredBase;
+    return sortOffers(categoryFiltered, store, sortOption);
+  }, [filteredBase, selectedCategory, store, sortOption]);
 
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const startIndex = (safePage - 1) * PAGE_SIZE;
   const renderedOffers = visible.slice(startIndex, startIndex + PAGE_SIZE);
+  const showingCategories = store !== ALL_STORES && !selectedCategory;
 
   if (!token) {
     return (
@@ -195,24 +263,89 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
     <div className="nrd-modal-backdrop" role="presentation">
       <section className="nrd-modal nrd-promo-modal" role="dialog" aria-modal="true">
         <header>
-          <button onClick={onClose} aria-label="Voltar"><ArrowLeft /></button>
-          <div><p>{offers.length.toLocaleString("pt-BR")} produtos em promoção</p><h2>Promoções</h2></div>
+          <button
+            onClick={() => {
+              if (selectedCategory) setSelectedCategory(null);
+              else onClose();
+            }}
+            aria-label={selectedCategory ? "Voltar para categorias" : "Voltar"}
+          >
+            <ArrowLeft />
+          </button>
+          <div>
+            <p>{store === ALL_STORES ? `${offers.length.toLocaleString("pt-BR")} produtos em promoção` : storeLabelFor(store)}</p>
+            <h2>{selectedCategory || "Promoções"}</h2>
+          </div>
           <button onClick={() => void load()} aria-label="Atualizar" disabled={loading}><RefreshCw className={loading ? "is-spinning" : ""} /></button>
         </header>
 
         <div className="nrd-promo-toolbar">
           <label><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Produto ou código" /></label>
-          <select value={store} onChange={(event) => setStore(event.target.value)}>
+          <select
+            value={store}
+            onChange={(event) => {
+              setStore(event.target.value);
+              setSelectedCategory(null);
+            }}
+          >
             <option value={ALL_STORES}>Todas as lojas</option>
             {stores.map((code) => <option key={code} value={code}>{storeLabelFor(code)}</option>)}
           </select>
+          <select value={sortOption} onChange={(event) => setSortOption(event.target.value as SortOption)} aria-label="Ordenar promoções">
+            <option value="recent">Adicionados recentemente</option>
+            <option value="priceAsc">Menor preço</option>
+            <option value="discountDesc">Maior desconto</option>
+          </select>
           <button className={favoritesOnly ? "is-active" : ""} onClick={() => setFavoritesOnly((value) => !value)}><Heart size={17} fill={favoritesOnly ? "currentColor" : "none"} /> Favoritas</button>
         </div>
+
+        {selectedCategory && (
+          <button className="nrd-promo-category-back" onClick={() => setSelectedCategory(null)}>
+            <ArrowLeft size={16} /> Todas as categorias de {storeNameFor(store)}
+          </button>
+        )}
 
         {error && <div className="nrd-promo-error">{error}<button onClick={() => void load()}>Tentar novamente</button></div>}
 
         {loading && !offers.length ? (
           <div className="nrd-promo-state"><RefreshCw className="is-spinning" /><strong>Atualizando promoções...</strong></div>
+        ) : showingCategories ? (
+          categoryGroups.length ? (
+            <div className="nrd-promo-category-list">
+              <div className="nrd-promo-category-intro">
+                <strong>Categorias disponíveis em {storeNameFor(store)}</strong>
+                <span>{filteredBase.length.toLocaleString("pt-BR")} produtos encontrados nesta loja</span>
+              </div>
+              {categoryGroups.map(([category, items]) => (
+                <section className="nrd-promo-category-section" key={category}>
+                  <header>
+                    <div>
+                      <h3>{category}</h3>
+                      <span>{items.length.toLocaleString("pt-BR")} ofertas</span>
+                    </div>
+                    <button onClick={() => setSelectedCategory(category)}>Abrir categoria</button>
+                  </header>
+                  <div className="nrd-promo-grid">
+                    {items.slice(0, CATEGORY_PREVIEW_LIMIT).map((offer) => (
+                      <PromotionCard
+                        key={offer.id}
+                        offer={offer}
+                        selectedStore={store}
+                        favorite={favorites.includes(offer.code)}
+                        onToggleFavorite={() => setFavorites((current) => (
+                          current.includes(offer.code)
+                            ? current.filter((code) => code !== offer.code)
+                            : [...current, offer.code]
+                        ))}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="nrd-promo-state"><Tag /><strong>Nenhuma promoção encontrada</strong><span>Altere a loja, os favoritos ou a pesquisa.</span></div>
+          )
         ) : visible.length ? (
           <>
             <div className="nrd-promo-grid">
@@ -241,7 +374,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
           <div className="nrd-promo-state"><Tag /><strong>Nenhuma promoção encontrada</strong><span>Altere a loja, os favoritos ou a pesquisa.</span></div>
         )}
 
-        <button className="nrd-promo-logout" onClick={() => { setToken(null); setOffers([]); setStore(ALL_STORES); setPage(1); }}><LogOut size={16} /> Sair das promoções</button>
+        <button className="nrd-promo-logout" onClick={() => { setToken(null); setOffers([]); setStore(ALL_STORES); setSelectedCategory(null); setPage(1); }}><LogOut size={16} /> Sair das promoções</button>
       </section>
     </div>
   );
