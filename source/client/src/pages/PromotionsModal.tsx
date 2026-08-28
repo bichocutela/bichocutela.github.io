@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ExternalLink, Heart, LockKeyhole, LogOut, RefreshCw, Search, Store, Tag, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Heart, LockKeyhole, LogOut, RefreshCw, Search, Store, Tag, X } from "lucide-react";
 import { fetchPromotions, loginPromotions, type PromotionOffer } from "@/lib/promotions";
 
-const INITIAL_VISIBLE_OFFERS = 6;
-const VISIBLE_STEP = 6;
+const PAGE_SIZE = 12;
 
 export default function PromotionsModal({ onClose }: { onClose: () => void }) {
   const [token, setToken] = useState<string | null>(null);
@@ -22,7 +21,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [visibleLimit, setVisibleLimit] = useState(INITIAL_VISIBLE_OFFERS);
+  const [page, setPage] = useState(1);
 
   async function load(session = token) {
     if (!session || loading) return;
@@ -31,7 +30,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
     try {
       const nextOffers = await fetchPromotions(session);
       setOffers(nextOffers);
-      setVisibleLimit(INITIAL_VISIBLE_OFFERS);
+      setPage(1);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível carregar as promoções.");
     } finally {
@@ -49,7 +48,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
       setPassword("");
       const nextOffers = await fetchPromotions(session);
       setOffers(nextOffers);
-      setVisibleLimit(INITIAL_VISIBLE_OFFERS);
+      setPage(1);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível entrar.");
     } finally {
@@ -62,7 +61,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
   }, [favorites]);
 
   useEffect(() => {
-    setVisibleLimit(INITIAL_VISIBLE_OFFERS);
+    setPage(1);
   }, [query, store, favoritesOnly]);
 
   const stores = useMemo(
@@ -81,7 +80,10 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [offers, query, store, favoritesOnly, favorites]);
 
-  const renderedOffers = visible.slice(0, visibleLimit);
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const renderedOffers = visible.slice(startIndex, startIndex + PAGE_SIZE);
 
   if (!token) {
     return (
@@ -108,7 +110,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
       <section className="nrd-modal nrd-promo-modal" role="dialog" aria-modal="true">
         <header>
           <button onClick={onClose} aria-label="Voltar"><ArrowLeft /></button>
-          <div><p>Ofertas atualizadas</p><h2>Promoções</h2></div>
+          <div><p>{offers.length.toLocaleString("pt-BR")} ofertas carregadas</p><h2>Promoções</h2></div>
           <button onClick={() => void load()} aria-label="Atualizar" disabled={loading}><RefreshCw className={loading ? "is-spinning" : ""} /></button>
         </header>
 
@@ -146,17 +148,18 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
                 </article>
               ))}
             </div>
-            {visibleLimit < visible.length && (
-              <button className="nrd-promo-primary" onClick={() => setVisibleLimit((current) => Math.min(current + VISIBLE_STEP, visible.length))}>
-                Mostrar mais promoções
-              </button>
-            )}
+
+            <nav className="nrd-promo-pagination" aria-label="Paginação das promoções">
+              <button disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft size={17} /> Anterior</button>
+              <span>Página {safePage.toLocaleString("pt-BR")} de {totalPages.toLocaleString("pt-BR")} · {visible.length.toLocaleString("pt-BR")} ofertas</span>
+              <button disabled={safePage >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Próxima <ChevronRight size={17} /></button>
+            </nav>
           </>
         ) : (
           <div className="nrd-promo-state"><Tag /><strong>Nenhuma promoção encontrada</strong><span>Altere a loja, os favoritos ou a pesquisa.</span></div>
         )}
 
-        <button className="nrd-promo-logout" onClick={() => { setToken(null); setOffers([]); setVisibleLimit(INITIAL_VISIBLE_OFFERS); }}><LogOut size={16} /> Sair das promoções</button>
+        <button className="nrd-promo-logout" onClick={() => { setToken(null); setOffers([]); setPage(1); }}><LogOut size={16} /> Sair das promoções</button>
       </section>
     </div>
   );
