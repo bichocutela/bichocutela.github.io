@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Heart, LockKeyhole, LogOut, RefreshCw, Search, Store, Tag, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Heart, LockKeyhole, LogOut, RefreshCw, Search, Star, Store, Tag, X } from "lucide-react";
 import {
   fetchPromotions,
   loginPromotions,
@@ -12,6 +12,7 @@ import {
 const PAGE_SIZE = 12;
 const CATEGORY_PREVIEW_LIMIT = 3;
 const ALL_STORES = "__all_stores__";
+const FAVORITE_STORE_KEY = "nrd-pwa-favorite-store";
 
 type SortOption = "recent" | "priceAsc" | "discountDesc";
 
@@ -54,6 +55,10 @@ function sortOffers(items: PromotionOffer[], selectedStore: string, sortOption: 
 
     return numericDiscount(storeB?.discount ?? "") - numericDiscount(storeA?.discount ?? "");
   });
+}
+
+function storeCodesFromOffers(offers: PromotionOffer[]) {
+  return new Set(offers.flatMap((offer) => offer.stores.map((item) => item.storeCode)).filter(Boolean));
 }
 
 function PromotionCard({
@@ -140,6 +145,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
   const [offers, setOffers] = useState<PromotionOffer[]>([]);
   const [query, setQuery] = useState("");
   const [store, setStore] = useState(ALL_STORES);
+  const [favoriteStore, setFavoriteStore] = useState<string>(() => localStorage.getItem(FAVORITE_STORE_KEY) || "");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [sortOption, setSortOption] = useState<SortOption>("recent");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -154,6 +160,14 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
+  function applyFavoriteStore(nextOffers: PromotionOffer[]) {
+    if (!favoriteStore) return;
+    if (storeCodesFromOffers(nextOffers).has(favoriteStore)) {
+      setStore(favoriteStore);
+      setSelectedCategory(null);
+    }
+  }
+
   async function load(session = token) {
     if (!session || loading) return;
     setLoading(true);
@@ -161,6 +175,10 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
     try {
       const nextOffers = await fetchPromotions(session);
       setOffers(nextOffers);
+      if (store !== ALL_STORES && !storeCodesFromOffers(nextOffers).has(store)) {
+        setStore(favoriteStore && storeCodesFromOffers(nextOffers).has(favoriteStore) ? favoriteStore : ALL_STORES);
+        setSelectedCategory(null);
+      }
       setPage(1);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível carregar as promoções.");
@@ -179,12 +197,26 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
       setPassword("");
       const nextOffers = await fetchPromotions(session);
       setOffers(nextOffers);
+      applyFavoriteStore(nextOffers);
       setPage(1);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível entrar.");
     } finally {
       setLoading(false);
     }
+  }
+
+  function toggleFavoriteStore() {
+    if (store === ALL_STORES) return;
+
+    if (favoriteStore === store) {
+      setFavoriteStore("");
+      localStorage.removeItem(FAVORITE_STORE_KEY);
+      return;
+    }
+
+    setFavoriteStore(store);
+    localStorage.setItem(FAVORITE_STORE_KEY, store);
   }
 
   useEffect(() => {
@@ -247,7 +279,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
           <LockKeyhole size={48} />
           <p>Acesso protegido</p>
           <h2>Promoções Nossa Gente</h2>
-          <span>Entre com o mesmo CPF e senha utilizados no Nossa Gente. A senha e a sessão não são salvas.</span>
+          <span>Entre com o mesmo CPF e senha utilizados no Nossa Gente. A senha é usada somente na autenticação e não é salva. Sua loja favorita fica salva somente neste aparelho.</span>
           <label>CPF<input inputMode="numeric" value={cpf} maxLength={11} onChange={(event) => setCpf(event.target.value.replace(/\D/g, "").slice(0, 11))} /></label>
           <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && cpf.length === 11 && password) void login(); }} /></label>
           {error && <div className="nrd-promo-error">{error}</div>}
@@ -281,16 +313,30 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
 
         <div className="nrd-promo-toolbar">
           <label><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Produto ou código" /></label>
-          <select
-            value={store}
-            onChange={(event) => {
-              setStore(event.target.value);
-              setSelectedCategory(null);
-            }}
-          >
-            <option value={ALL_STORES}>Todas as lojas</option>
-            {stores.map((code) => <option key={code} value={code}>{storeLabelFor(code)}</option>)}
-          </select>
+          <div className="nrd-promo-store-control">
+            <select
+              value={store}
+              aria-label="Escolher loja"
+              onChange={(event) => {
+                setStore(event.target.value);
+                setSelectedCategory(null);
+              }}
+            >
+              <option value={ALL_STORES}>Todas as lojas</option>
+              {stores.map((code) => <option key={code} value={code}>{storeLabelFor(code)}</option>)}
+            </select>
+            <button
+              type="button"
+              className={store !== ALL_STORES && favoriteStore === store ? "is-favorite-store" : ""}
+              disabled={store === ALL_STORES}
+              onClick={toggleFavoriteStore}
+              aria-label={favoriteStore === store ? "Remover loja favorita" : "Favoritar esta loja"}
+              title={store === ALL_STORES ? "Escolha uma loja para favoritar" : favoriteStore === store ? "Remover loja favorita" : "Favoritar esta loja"}
+            >
+              <Star size={18} fill={favoriteStore === store ? "currentColor" : "none"} />
+              <span>{favoriteStore === store ? "Favorita" : "Favoritar"}</span>
+            </button>
+          </div>
           <select value={sortOption} onChange={(event) => setSortOption(event.target.value as SortOption)} aria-label="Ordenar promoções">
             <option value="recent">Adicionados recentemente</option>
             <option value="priceAsc">Menor preço</option>
@@ -298,6 +344,13 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
           </select>
           <button className={favoritesOnly ? "is-active" : ""} onClick={() => setFavoritesOnly((value) => !value)}><Heart size={17} fill={favoritesOnly ? "currentColor" : "none"} /> Favoritas</button>
         </div>
+
+        {favoriteStore && store === favoriteStore && (
+          <div className="nrd-promo-favorite-store-note">
+            <Star size={16} fill="currentColor" />
+            <span><strong>{storeNameFor(favoriteStore)}</strong> é sua loja favorita. No próximo login, Promoções abrirá direto aqui.</span>
+          </div>
+        )}
 
         {selectedCategory && (
           <button className="nrd-promo-category-back" onClick={() => setSelectedCategory(null)}>
