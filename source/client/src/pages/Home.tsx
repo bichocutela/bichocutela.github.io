@@ -4,9 +4,7 @@ import {
   Bell,
   Check,
   ChevronRight,
-  Clock3,
   Heart,
-  History,
   Menu,
   Mic,
   Monitor,
@@ -17,7 +15,6 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useLocation } from "wouter";
 import { useNrdCatalog } from "@/hooks/useNrdData";
 import {
   activeBackgroundFor,
@@ -26,10 +23,18 @@ import {
   type ThemeKey,
 } from "@/lib/nrd";
 
-const logoUrl = "/manus-storage/nrd-rebuild-logo-symbol_93698036.png";
-const defaultHeroUrl = "/manus-storage/nrd-rebuild-catalog-hero_65ebaaac.jpg";
-const scanIllustrationUrl = "/manus-storage/nrd-rebuild-scan-illustration_10173554.jpg";
-const installIllustrationUrl = "/manus-storage/nrd-rebuild-install-illustration_e7a95bc5.jpg";
+const logoUrl = "/manus-storage/nrd-icon-original-user_0cf71537.png";
+const scanIllustrationUrl = "/manus-storage/nrd-pwa-barcode-backdrop_5b26df06.png";
+const installIllustrationUrl = "/manus-storage/nrd-pwa-install-illustration_6f898920.png";
+
+const officialThemeBanners: Record<ThemeKey, string> = {
+  multicolor: "/manus-storage/nrd-banner-multicolor-original_62abf744.jpg",
+  red: "/manus-storage/nrd-banner-red-full-hands_93f51f56.png",
+  orange: "/manus-storage/nrd-banner-orange-full-hands_8221a329.png",
+  gold: "/manus-storage/nrd-banner-gold-enhanced_f46dd112.png",
+  green: "/manus-storage/nrd-banner-green-enhanced_253c061f.png",
+  blue: "/manus-storage/nrd-banner-blue-full-hands_b3eb3b5d.png",
+};
 
 const themeOptions: { key: ThemeKey; label: string; color: string }[] = [
   { key: "multicolor", label: "Multicolorido", color: "#23834A" },
@@ -88,7 +93,6 @@ function formatTime(value?: number) {
 }
 
 export default function Home() {
-  const [, setLocation] = useLocation();
   const { products, settings, categories, catalogReady, settingsReady, error } = useNrdCatalog();
   const [preferences, setPreferences] = useStoredState<LocalPreferences>("nrd-pwa-preferences-v2", initialPreferences);
   const [favorites, setFavorites] = useStoredState<string[]>("nrd-pwa-favorites", []);
@@ -112,7 +116,7 @@ export default function Home() {
 
   const effectiveTheme = settings.overrideLocalTheme ? settings.theme : preferences.theme;
   const activeBackground = activeBackgroundFor(settings, effectiveTheme);
-  const heroImage = activeBackground?.url ?? settings.bannerUrl ?? defaultHeroUrl;
+  const heroImage = activeBackground?.url ?? settings.bannerUrl ?? officialThemeBanners[effectiveTheme];
   const accent = themeOptions.find((item) => item.key === effectiveTheme)?.color ?? "#23834A";
   const activeCategories = categories.filter((item) => item.isActive);
 
@@ -199,25 +203,16 @@ export default function Home() {
 
   return (
     <main className="nrd-app" style={pageStyle}>
-      <section className="nrd-hero">
-        <div className="nrd-hero__wash" />
+      <header className="nrd-hero" aria-label={`Banner do tema ${effectiveTheme}`}>
         <div className="nrd-hero__content">
           <button className="nrd-icon-button" onClick={() => setDrawerOpen(true)} aria-label="Abrir menu">
             <Menu size={22} />
           </button>
-          <button className="nrd-icon-button" onClick={() => setSettingsOpen(true)} aria-label="Abrir preferências">
-            <Settings2 size={21} />
+          <button className="nrd-icon-button" onClick={() => toast.message("Você está em dia. Nenhuma notificação nova.")} aria-label="Abrir notificações">
+            <Bell size={21} />
           </button>
         </div>
-        <div className="nrd-brand-line">
-          <img className="nrd-logo" src={logoUrl} alt="Símbolo NRD Códigos" />
-          <div>
-            <p>Consulta operacional</p>
-            <strong>NRD <span>Códigos</span></strong>
-          </div>
-          {activeBackground && <span className="nrd-schedule-state"><Clock3 size={13} /> Fundo programado</span>}
-        </div>
-      </section>
+      </header>
 
       <section className="nrd-search-panel" aria-label="Pesquisar catálogo">
         <label className="nrd-search-field">
@@ -225,12 +220,15 @@ export default function Home() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Pesquisar produto por nome ou código"
+            placeholder="Pesquisar produto..."
             aria-label="Pesquisar produto por nome ou código"
           />
           {query ? <button onClick={() => setQuery("")} aria-label="Limpar busca"><X size={19} /></button> : <button onClick={startVoiceSearch} aria-label="Pesquisar por voz"><Mic size={19} /></button>}
         </label>
-        <p><Sparkles size={15} /> {catalogReady ? `${products.length.toLocaleString("pt-BR")} itens no catálogo compartilhado` : "Atualizando catálogo compartilhado"}</p>
+        <button className="nrd-search-action" type="button" onClick={() => document.querySelector<HTMLInputElement>(".nrd-search-field input")?.focus()}>
+          <Search size={19} /> Pesquisar
+        </button>
+        <p><Sparkles size={15} /> {catalogReady ? `${products.length.toLocaleString("pt-BR")} produtos disponíveis` : "Atualizando catálogo compartilhado"}</p>
       </section>
 
       <section className="nrd-content">
