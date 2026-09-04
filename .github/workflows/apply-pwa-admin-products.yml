@@ -1,0 +1,59 @@
+name: Aplicar melhorias do catálogo administrativo PWA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-pwa-admin-products.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Aplicar melhorias
+        run: python3 .github/scripts/patch_pwa_admin_products.py
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Instalar dependências
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+
+      - name: Validar TypeScript
+        working-directory: source
+        run: pnpm check
+
+      - name: Validar build
+        working-directory: source
+        run: pnpm exec vite build
+
+      - name: Commitar alterações
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/client/src/components/ManagementPanel.tsx source/client/src/lib/managementData.ts
+          if git diff --cached --quiet; then
+            echo "Nenhuma alteração necessária."
+          else
+            git commit -m "feat(pwa): melhorar catálogo administrativo"
+            git push
+          fi
