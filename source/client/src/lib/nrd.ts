@@ -1,7 +1,7 @@
-export const THEME_KEYS = ["multicolor", "red", "gold", "green", "blue", "orange"] as const;
+export const THEME_KEYS = ["multicolor", "red", "gold", "green", "blue", "orange", "glass"] as const;
 
 export type ThemeKey = (typeof THEME_KEYS)[number];
-export type RemoteThemeKey = ThemeKey | "glass";
+export type RemoteThemeKey = ThemeKey;
 
 export type Product = {
   id: string;
@@ -145,12 +145,9 @@ function parseBackgroundEntries(entries: unknown): ThemeBackground[] {
 
 export function settingsFromRemote(raw: Record<string, unknown>): AppSettings {
   const remoteThemeRaw = typeof raw.appearanceTheme === "string" ? raw.appearanceTheme.trim() : "";
-  const remoteTheme: RemoteThemeKey = remoteThemeRaw === "glass"
-    ? "glass"
-    : THEME_KEYS.includes(remoteThemeRaw as ThemeKey)
-      ? (remoteThemeRaw as ThemeKey)
-      : DEFAULT_SETTINGS.theme;
-  const effectiveTheme: ThemeKey = remoteTheme === "glass" ? "multicolor" : remoteTheme;
+  const remoteTheme: RemoteThemeKey = THEME_KEYS.includes(remoteThemeRaw as ThemeKey)
+    ? (remoteThemeRaw as ThemeKey)
+    : DEFAULT_SETTINGS.theme;
 
   const rawBackgrounds = raw.appearanceThemeBackgrounds;
   const themeBackgrounds: AppearanceSettings["themeBackgrounds"] = {};
@@ -174,7 +171,7 @@ export function settingsFromRemote(raw: Record<string, unknown>): AppSettings {
 
   return {
     overrideLocalTheme: raw.appearanceOverrideLocalTheme === true,
-    theme: effectiveTheme,
+    theme: remoteTheme,
     remoteTheme,
     appearanceMode: ["system", "light", "dark"].includes(remoteMode) ? (remoteMode as AppearanceSettings["appearanceMode"]) : DEFAULT_SETTINGS.appearanceMode,
     themeBackgrounds,

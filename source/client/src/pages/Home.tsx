@@ -46,6 +46,7 @@ const officialThemeBanners: Record<ThemeKey, string> = {
   gold: "/manus-storage/nrd-banner-gold-enhanced_f46dd112.png",
   green: "/manus-storage/nrd-banner-green-enhanced_253c061f.png",
   blue: "/manus-storage/nrd-banner-blue-full-hands_b3eb3b5d.png",
+  glass: "/manus-storage/nrd-banner-multicolor-original_62abf744.jpg",
 };
 
 const themeOptions: { key: ThemeKey; label: string; color: string }[] = [
@@ -55,6 +56,7 @@ const themeOptions: { key: ThemeKey; label: string; color: string }[] = [
   { key: "gold", label: "Dourado", color: "#A88018" },
   { key: "green", label: "Verde", color: "#23834A" },
   { key: "blue", label: "Azul", color: "#1F6BB5" },
+  { key: "glass", label: "Glass Soft", color: "#6F8794" },
 ];
 
 type LocalPreferences = {
@@ -105,7 +107,7 @@ function formatTime(value?: number) {
 }
 
 export default function Home() {
-  const { products, settings, categories, catalogReady, settingsReady, error } = useNrdCatalog();
+  const { products, settings, categories, catalogReady, error } = useNrdCatalog();
   const [preferences, setPreferences] = useStoredState<LocalPreferences>("nrd-pwa-preferences-v2", initialPreferences);
   const [favorites, setFavorites] = useStoredState<string[]>("nrd-pwa-favorites", []);
   const [history, setHistory] = useStoredState<string[]>("nrd-pwa-history", []);
@@ -151,11 +153,17 @@ export default function Home() {
     };
   }, []);
 
-  const effectiveTheme = settings.overrideLocalTheme ? settings.theme : preferences.theme;
+  const effectiveTheme = preferences.theme;
   const activeBackground = activeBackgroundFor(settings, effectiveTheme);
-  const heroImage = activeBackground?.url ?? settings.bannerUrl ?? officialThemeBanners[effectiveTheme];
+  const heroImage = activeBackground?.url ?? officialThemeBanners[effectiveTheme];
   const accent = themeOptions.find((item) => item.key === effectiveTheme)?.color ?? "#23834A";
   const activeCategories = categories.filter((item) => item.isActive);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("nrd-glass-soft-active", effectiveTheme === "glass");
+    return () => root.classList.remove("nrd-glass-soft-active");
+  }, [effectiveTheme]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -357,7 +365,7 @@ export default function Home() {
 
       {selectedCategory && <ProductModal title={selectedCategory} products={categoryProducts} favorites={favorites} onClose={() => setSelectedCategory(null)} onOpen={openProduct} onFavorite={toggleFavorite} />}
       {selectedProduct && <ProductDetail product={selectedProduct} favorite={favorites.includes(selectedProduct.code)} onClose={() => setSelectedProduct(null)} onFavorite={toggleFavorite} />}
-      {settingsOpen && <PreferencesModal preferences={preferences} settingsReady={settingsReady} remoteLocked={settings.overrideLocalTheme} remoteTheme={settings.theme} onChange={setPreferences} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <PreferencesModal preferences={preferences} onChange={setPreferences} onClose={() => setSettingsOpen(false)} />}
       {installOpen && <InstallModal onInstall={installPwa} onClose={() => setInstallOpen(false)} />}
       {qrPlatform && <QrInstallModal platform={qrPlatform} onInstallPwa={installPwa} onClose={() => setQrPlatform(null)} />}
       {notificationsOpen && <NotificationsModal notifications={notifications} onOpen={openNotification} onReadAll={readAllNotifications} onClose={() => setNotificationsOpen(false)} />}
@@ -404,8 +412,8 @@ function ProductDetail({ product, favorite, onClose, onFavorite }: { product: Pr
   return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--detail" role="dialog" aria-modal="true" aria-label={product.name} onMouseDown={(event) => event.stopPropagation()}><button className="nrd-modal-close" onClick={onClose} aria-label="Fechar"><X /></button><p className="nrd-detail-eyebrow">{product.category} · {product.unit}</p><h2>{product.name}</h2>{product.imageUrl && <img className="nrd-product-image" src={product.imageUrl} alt="" />}<div className="nrd-barcode"><span>código do produto</span><strong>{product.code}</strong><i>{Array.from(product.code).map((digit, index) => <b key={`${digit}-${index}`} style={{ width: `${2 + (Number(digit) % 4)}px` }} />)}</i></div><button className="nrd-detail-favorite" onClick={() => onFavorite(product.code)}><Heart size={18} fill={favorite ? "currentColor" : "none"} /> {favorite ? "Remover dos favoritos" : "Salvar nos favoritos"}</button><small>Última atualização: {formatTime(product.timestamp)}</small></section></div>;
 }
 
-function PreferencesModal({ preferences, settingsReady, remoteLocked, remoteTheme, onChange, onClose }: { preferences: LocalPreferences; settingsReady: boolean; remoteLocked: boolean; remoteTheme: ThemeKey; onChange: (value: LocalPreferences) => void; onClose: () => void }) {
-  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--preferences" role="dialog" aria-modal="true" aria-label="Configurações" onMouseDown={(event) => event.stopPropagation()}><header><div><p>Preferências deste dispositivo</p><h2>Configurações</h2></div><button onClick={onClose} aria-label="Fechar"><X /></button></header><div className="nrd-preference-block"><p className="nrd-setting-title">Modo de aparência</p><div className="nrd-choice-row">{(["system", "light", "dark"] as const).map((mode) => <button key={mode} className={preferences.mode === mode ? "is-selected" : ""} onClick={() => onChange({ ...preferences, mode })}>{mode === "system" ? "Sistema" : mode === "light" ? "Claro" : "Escuro"}{preferences.mode === mode && <Check size={15} />}</button>)}</div></div><div className="nrd-preference-block"><p className="nrd-setting-title">Tema do aplicativo</p>{remoteLocked && <small className="nrd-remote-note">O Painel Mestre publicou o tema {themeOptions.find((item) => item.key === remoteTheme)?.label} para todos.</small>}<div className="nrd-theme-options">{themeOptions.map((theme) => <button key={theme.key} aria-label={`Tema ${theme.label}`} className={preferences.theme === theme.key ? "is-selected" : ""} disabled={remoteLocked || !settingsReady} onClick={() => onChange({ ...preferences, theme: theme.key })} style={{ "--swatch": theme.color } as React.CSSProperties}><span />{preferences.theme === theme.key && <Check size={13} />}</button>)}</div></div><div className="nrd-preference-block"><p className="nrd-setting-title">Tamanho das letras</p><div className="nrd-choice-row">{(["small", "default", "large"] as const).map((scale) => <button key={scale} className={preferences.fontScale === scale ? "is-selected" : ""} onClick={() => onChange({ ...preferences, fontScale: scale })}>{scale === "small" ? "Pequeno" : scale === "default" ? "Padrão" : "Grande"}{preferences.fontScale === scale && <Check size={15} />}</button>)}</div></div><div className="nrd-preference-block nrd-preference-block--hint"><Bell size={18} /><div><strong>Avisos no dispositivo</strong><p>As permissões de notificação continuam sob controle do navegador.</p></div></div></section></div>;
+function PreferencesModal({ preferences, onChange, onClose }: { preferences: LocalPreferences; onChange: (value: LocalPreferences) => void; onClose: () => void }) {
+  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--preferences" role="dialog" aria-modal="true" aria-label="Configurações" onMouseDown={(event) => event.stopPropagation()}><header><div><p>Preferências deste dispositivo</p><h2>Configurações</h2></div><button onClick={onClose} aria-label="Fechar"><X /></button></header><div className="nrd-preference-block"><p className="nrd-setting-title">Modo de aparência</p><div className="nrd-choice-row">{(["system", "light", "dark"] as const).map((mode) => <button key={mode} className={preferences.mode === mode ? "is-selected" : ""} onClick={() => onChange({ ...preferences, mode })}>{mode === "system" ? "Sistema" : mode === "light" ? "Claro" : "Escuro"}{preferences.mode === mode && <Check size={15} />}</button>)}</div></div><div className="nrd-preference-block"><p className="nrd-setting-title">Tema do aplicativo</p><small className="nrd-local-theme-note">O tema é uma preferência deste dispositivo. O fundo publicado pelo Mestre será aplicado automaticamente ao tema escolhido.</small><div className="nrd-theme-options">{themeOptions.map((theme) => <button key={theme.key} aria-label={`Tema ${theme.label}`} title={theme.label} className={preferences.theme === theme.key ? "is-selected" : ""} onClick={() => onChange({ ...preferences, theme: theme.key })} style={{ "--swatch": theme.color } as React.CSSProperties}><span />{preferences.theme === theme.key && <Check size={13} />}</button>)}</div><div className="nrd-theme-label">{themeOptions.find((item) => item.key === preferences.theme)?.label}</div></div><div className="nrd-preference-block"><p className="nrd-setting-title">Tamanho das letras</p><div className="nrd-choice-row">{(["small", "default", "large"] as const).map((scale) => <button key={scale} className={preferences.fontScale === scale ? "is-selected" : ""} onClick={() => onChange({ ...preferences, fontScale: scale })}>{scale === "small" ? "Pequeno" : scale === "default" ? "Padrão" : "Grande"}{preferences.fontScale === scale && <Check size={15} />}</button>)}</div></div><div className="nrd-preference-block nrd-preference-block--hint"><Bell size={18} /><div><strong>Avisos no dispositivo</strong><p>As permissões de notificação continuam sob controle do navegador.</p></div></div></section></div>;
 }
 
 function InstallModal({ onInstall, onClose }: { onInstall: () => void; onClose: () => void }) {
