@@ -129,27 +129,40 @@ function productFromRaw(id: string, raw: DocumentData): ManagedProduct | null {
   };
 }
 
-export async function fetchManagementData(includeSnapshots: boolean): Promise<ManagementData> {
-  const [settingsDoc, productsSnap, tabsSnap, suggestionsSnap, snapshotsSnap] = await Promise.all([
+export async function fetchManagementData(includeMestreData: boolean): Promise<ManagementData> {
+  // Produtos e configurações são essenciais para Admin e Mestre. Áreas exclusivas
+  // do Mestre são buscadas separadamente para que uma falha secundária não derrube
+  // todo o catálogo administrativo.
+  const [settingsDoc, productsSnap] = await Promise.all([
     getDoc(doc(nrdDb, "config", "appSettings")),
     getDocs(collection(nrdDb, "products")),
+  ]);
+
+  const extraResults = includeMestreData ? await Promise.allSettled([
     getDocs(collection(nrdDb, "dynamic_tabs")),
     getDocs(collection(nrdDb, "suggestions")),
-    includeSnapshots ? getDocs(collection(nrdDb, "catalog_history")) : Promise.resolve(null),
-  ]);
+    getDocs(collection(nrdDb, "catalog_history")),
+  ]) : null;
+  const tabsResult = extraResults?.[0];
+  const suggestionsResult = extraResults?.[1];
+  const snapshotsResult = extraResults?.[2];
+  const tabsSnap = tabsResult?.status === "fulfilled" ? tabsResult.value : null;
+  const suggestionsSnap = suggestionsResult?.status === "fulfilled" ? suggestionsResult.value : null;
+  const snapshotsSnap = snapshotsResult?.status === "fulfilled" ? snapshotsResult.value : null;
+
   const settings = settingsDoc.data() ?? {};
   const products = productsSnap.docs.map((entry) => productFromRaw(entry.id, entry.data())).filter((item): item is ManagedProduct => item !== null);
-  const tabs = tabsSnap.docs.map((entry): ManagedTab | null => {
+  const tabs = tabsSnap ? tabsSnap.docs.map((entry): ManagedTab | null => {
     const raw = entry.data() as DocumentData;
     const id = typeof raw.id === "number" ? raw.id : Number(entry.id);
     const title = typeof raw.title === "string" ? raw.title.trim() : "";
     if (!Number.isFinite(id) || !title) return null;
     return { id, title, type: raw.type === "image" ? "image" : "text", content: typeof raw.content === "string" ? raw.content : "", displayOrder: typeof raw.displayOrder === "number" ? raw.displayOrder : 0 };
-  }).filter((item): item is ManagedTab => item !== null).sort((a, b) => a.displayOrder - b.displayOrder || a.id - b.id);
-  const suggestions = suggestionsSnap.docs.map((entry): ManagedSuggestion => {
+  }).filter((item): item is ManagedTab => item !== null).sort((a, b) => a.displayOrder - b.displayOrder || a.id - b.id) : [];
+  const suggestions = suggestionsSnap ? suggestionsSnap.docs.map((entry): ManagedSuggestion => {
     const raw = entry.data() as DocumentData;
     return { id: entry.id, text: typeof raw.text === "string" ? raw.text : "", status: typeof raw.status === "string" ? raw.status : "pending", submittedBy: typeof raw.submittedBy === "string" ? raw.submittedBy : "Usuário", createdAt: numericTimestamp(raw.createdAt) };
-  }).sort((a, b) => b.createdAt - a.createdAt);
+  }).sort((a, b) => b.createdAt - a.createdAt) : [];
   const snapshots = snapshotsSnap ? snapshotsSnap.docs.map((entry): CatalogSnapshot => {
     const raw = entry.data() as DocumentData;
     return { id: entry.id, createdAt: numericTimestamp(raw.createdAt), productCount: typeof raw.productCount === "number" ? raw.productCount : 0, createdBy: typeof raw.createdBy === "string" ? raw.createdBy : "desconhecido", reason: typeof raw.reason === "string" ? raw.reason : "manual", restoredAt: numericTimestamp(raw.restoredAt) || null };
