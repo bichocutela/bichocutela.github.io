@@ -1,5 +1,5 @@
 name: Aplicar correção PWA temas e painel
-# execução final: fundos isolados por tema
+# execução definitiva: sem ponte Glass para Multicolor
 
 on:
   push:
@@ -26,10 +26,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add source/client/src/lib/nrd.ts source/client/src/pages/Home.tsx source/client/src/components/ManagementPanel.tsx source/client/src/components/ManagementPanel.css
+          git add source/client/src/lib/nrd.ts
           if git diff --cached --quiet; then
             echo "Nenhuma alteração necessária."
           else
-            git commit -m "fix(pwa): isolar fundos Glass Soft por tema"
+            git commit -m "fix(pwa): separar fundo Glass Soft do Multicolor"
             git push
           fi
