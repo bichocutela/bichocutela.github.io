@@ -19,6 +19,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Corrigir tipagem do patch
+        run: python3 .github/scripts/fix_pwa_admin_products_patch.py
+
       - name: Aplicar melhorias
         run: python3 .github/scripts/patch_pwa_admin_products.py
 
