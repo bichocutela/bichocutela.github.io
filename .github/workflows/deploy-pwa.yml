@@ -1,5 +1,5 @@
 name: Publicar PWA
-# publicação acionada após ajuste de contraste do painel administrativo
+# publicação acionada após melhorias do catálogo administrativo
 
 on:
   push:
