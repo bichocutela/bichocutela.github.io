@@ -162,8 +162,14 @@ export default function Home() {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle("nrd-glass-soft-active", effectiveTheme === "glass");
-    return () => root.classList.remove("nrd-glass-soft-active");
-  }, [effectiveTheme]);
+    root.dataset.nrdTheme = effectiveTheme;
+    root.style.setProperty("--nrd-theme-accent", accent);
+    return () => {
+      root.classList.remove("nrd-glass-soft-active");
+      delete root.dataset.nrdTheme;
+      root.style.removeProperty("--nrd-theme-accent");
+    };
+  }, [effectiveTheme, accent]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

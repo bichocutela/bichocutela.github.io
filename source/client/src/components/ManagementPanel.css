@@ -17,3 +17,65 @@
 .nrd-local-theme-note{display:block;margin:.1rem 0 .65rem;color:#728078;font-size:.78rem;line-height:1.35}
 .nrd-theme-label{margin-top:.5rem;color:var(--accent);font-size:.82rem;font-weight:800}
 @media(max-width:720px){.nrd-management-panel{height:100dvh}.nrd-management-header{padding:12px 14px;min-height:62px;box-sizing:border-box}.nrd-management-header h2{font-size:1.15rem}.nrd-management-login{width:calc(100% - 24px);margin:14px auto auto;padding:18px 16px 22px;border-radius:18px}.nrd-management-login p{margin-bottom:14px}}
+
+
+/* Sincronização visual do Painel Administrativo com o tema local do PWA */
+.nrd-management-backdrop{
+  --nrd-management-accent:var(--nrd-theme-accent,#23834a);
+  --nrd-management-action:color-mix(in srgb,var(--nrd-management-accent) 82%,#111 18%);
+  --nrd-management-soft:color-mix(in srgb,var(--nrd-management-accent) 9%,#fff 91%);
+  --nrd-management-border:color-mix(in srgb,var(--nrd-management-accent) 24%,#d5dde3 76%);
+}
+.nrd-management-header{
+  background:linear-gradient(135deg,var(--nrd-management-action),color-mix(in srgb,var(--nrd-management-accent) 58%,#111 42%));
+  color:#fff;
+}
+.nrd-management-header p,.nrd-management-header h2,.nrd-management-icon{color:#fff}
+.nrd-management-icon{background:rgba(255,255,255,.18)}
+.nrd-management-nav button.is-active,
+.nrd-management-form-actions button:last-child,
+.nrd-management-primary,
+.nrd-management-filter-row button.is-selected,
+.nrd-management-login form>button{
+  background:var(--nrd-management-action);
+  border-color:var(--nrd-management-action);
+  color:#fff;
+}
+.nrd-management-login>svg,.nrd-management-search>svg{color:var(--nrd-management-action)}
+.nrd-management-switch-row input,.nrd-management-slider input{accent-color:var(--nrd-management-action)}
+.nrd-management-bulk{background:color-mix(in srgb,var(--nrd-management-accent) 11%,transparent)}
+.nrd-management-login{
+  border-color:var(--nrd-management-border);
+  box-shadow:0 10px 32px color-mix(in srgb,var(--nrd-management-accent) 10%,rgba(20,35,50,.08));
+}
+.nrd-management-session,.nrd-management-nav{border-color:var(--nrd-management-border)}
+.nrd-management-session>span svg{color:var(--nrd-management-action)}
+.nrd-management-session button:focus-visible,
+.nrd-management-nav button:focus-visible,
+.nrd-management-login input:focus,
+.nrd-management-search input:focus,
+.nrd-management-form-grid input:focus,
+.nrd-management-form-grid select:focus,
+.nrd-management-form-grid textarea:focus{
+  outline:3px solid color-mix(in srgb,var(--nrd-management-accent) 22%,transparent);
+  outline-offset:1px;
+  border-color:var(--nrd-management-action);
+}
+.nrd-management-login input::placeholder,
+.nrd-management-search input::placeholder,
+.nrd-management-form-grid input::placeholder{
+  color:#68737e;
+  opacity:1;
+}
+.dark .nrd-management-login input::placeholder,
+.dark .nrd-management-search input::placeholder,
+.dark .nrd-management-form-grid input::placeholder{color:#aab4bf}
+html[data-nrd-theme="glass"] .nrd-management-panel,
+html[data-nrd-theme="glass"] .nrd-management-login,
+html[data-nrd-theme="glass"] .nrd-management-card,
+html[data-nrd-theme="glass"] .nrd-management-form-card,
+html[data-nrd-theme="glass"] .nrd-management-metric,
+html[data-nrd-theme="glass"] .nrd-management-action-card{
+  backdrop-filter:blur(18px) saturate(1.08);
+  -webkit-backdrop-filter:blur(18px) saturate(1.08);
+}
