@@ -1,6 +1,7 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 /** Public browser configuration for the already-published NRD Firebase web application. */
 const firebaseConfig = {
@@ -16,3 +17,4 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const nrdAuth = getAuth(app);
 export const nrdDb = getFirestore(app);
+export const nrdStorage = getStorage(app);
