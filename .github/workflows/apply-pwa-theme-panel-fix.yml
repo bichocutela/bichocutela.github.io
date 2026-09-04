@@ -1,4 +1,5 @@
 name: Aplicar correção PWA temas e painel
+# trigger da correção
 
 on:
   push:
