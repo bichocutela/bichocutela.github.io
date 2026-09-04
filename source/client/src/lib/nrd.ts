@@ -156,15 +156,7 @@ export function settingsFromRemote(raw: Record<string, unknown>): AppSettings {
     for (const key of THEME_KEYS) {
       const parsed = parseBackgroundEntries(backgroundMap[key]);
       if (parsed.length) themeBackgrounds[key] = parsed;
-    }
-    // O Android identifica Glass Soft como "glass". Apenas quando Glass é o tema
-    // global ativo fazemos a ponte para a Home atual do PWA, evitando interferir
-    // no Multicolorido quando o Mestre estiver usando outro tema.
-    if (remoteTheme === "glass") {
-      const glassBackgrounds = parseBackgroundEntries(backgroundMap.glass);
-      if (glassBackgrounds.length) themeBackgrounds.multicolor = glassBackgrounds;
-    }
-  }
+    }  }
 
   const remoteMode = typeof raw.appearanceMode === "string" ? raw.appearanceMode.trim() : "";
   const asBoundedInt = (value: unknown, fallback: number, minimum: number, maximum: number) => typeof value === "number" ? Math.min(maximum, Math.max(minimum, Math.round(value))) : fallback;
