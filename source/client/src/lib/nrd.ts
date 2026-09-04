@@ -1,4 +1,4 @@
-export const THEME_KEYS = ["multicolor", "red", "gold", "green", "blue", "orange"] as const;
+export const THEME_KEYS = ["multicolor", "red", "gold", "green", "blue", "orange", "glass_soft"] as const;
 
 export type ThemeKey = (typeof THEME_KEYS)[number];
 
@@ -174,8 +174,7 @@ export function settingsFromRemote(raw: Record<string, unknown>): AppSettings {
             endDate: typeof item.endDate === "string" ? item.endDate.trim() : null,
           };
         })
-        .filter((item): item is ThemeBackground => item !== null)
-        .slice(0, 5);
+        .filter((item): item is ThemeBackground => item !== null);
     }
   }
 
