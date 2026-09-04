@@ -1,6 +1,7 @@
-export const THEME_KEYS = ["multicolor", "red", "gold", "green", "blue", "orange", "glass_soft"] as const;
+export const THEME_KEYS = ["multicolor", "red", "gold", "green", "blue", "orange"] as const;
 
 export type ThemeKey = (typeof THEME_KEYS)[number];
+export type RemoteThemeKey = ThemeKey | "glass";
 
 export type Product = {
   id: string;
@@ -35,6 +36,7 @@ export type AppearanceSettings = {
   theme: ThemeKey;
   appearanceMode: "system" | "light" | "dark";
   themeBackgrounds: Partial<Record<ThemeKey, ThemeBackground[]>>;
+  remoteTheme?: RemoteThemeKey;
 };
 
 export type HomeSettings = {
@@ -68,6 +70,7 @@ export const DEFAULT_CATEGORIES: CategoryDefinition[] = [
 export const DEFAULT_SETTINGS: AppSettings = {
   overrideLocalTheme: false,
   theme: "multicolor",
+  remoteTheme: "multicolor",
   appearanceMode: "system",
   themeBackgrounds: {},
   showCategories: true,
@@ -151,41 +154,61 @@ export function productFromRemote(id: string, raw: Record<string, unknown>): Pro
   };
 }
 
+function parseBackgroundEntries(entries: unknown): ThemeBackground[] {
+  if (!Array.isArray(entries)) return [];
+  return entries
+    .map((entry): ThemeBackground | null => {
+      if (!entry || typeof entry !== "object") return null;
+      const item = entry as Record<string, unknown>;
+      const id = typeof item.id === "string" ? item.id.trim() : "";
+      const url = typeof item.url === "string" ? item.url.trim() : "";
+      if (!id || !/^https?:\/\//.test(url)) return null;
+      return {
+        id,
+        url,
+        label: typeof item.label === "string" && item.label.trim() ? item.label.trim() : "Fundo personalizado",
+        isActive: item.isActive === true,
+        startDate: typeof item.startDate === "string" ? item.startDate.trim() : null,
+        endDate: typeof item.endDate === "string" ? item.endDate.trim() : null,
+      };
+    })
+    .filter((item): item is ThemeBackground => item !== null);
+}
+
 export function settingsFromRemote(raw: Record<string, unknown>): AppSettings {
   const rawBackgrounds = raw.appearanceThemeBackgrounds;
   const themeBackgrounds: AppearanceSettings["themeBackgrounds"] = {};
   if (rawBackgrounds && typeof rawBackgrounds === "object") {
+    const backgroundMap = rawBackgrounds as Record<string, unknown>;
     for (const key of THEME_KEYS) {
-      const entries = (rawBackgrounds as Record<string, unknown>)[key];
-      if (!Array.isArray(entries)) continue;
-      themeBackgrounds[key] = entries
-        .map((entry): ThemeBackground | null => {
-          if (!entry || typeof entry !== "object") return null;
-          const item = entry as Record<string, unknown>;
-          const id = typeof item.id === "string" ? item.id.trim() : "";
-          const url = typeof item.url === "string" ? item.url.trim() : "";
-          if (!id || !/^https?:\/\//.test(url)) return null;
-          return {
-            id,
-            url,
-            label: typeof item.label === "string" && item.label.trim() ? item.label.trim() : "Fundo personalizado",
-            isActive: item.isActive === true,
-            startDate: typeof item.startDate === "string" ? item.startDate.trim() : null,
-            endDate: typeof item.endDate === "string" ? item.endDate.trim() : null,
-          };
-        })
-        .filter((item): item is ThemeBackground => item !== null);
+      const parsed = parseBackgroundEntries(backgroundMap[key]);
+      if (parsed.length) themeBackgrounds[key] = parsed;
+    }
+
+    // O Android publica o Glass Soft usando a chave "glass". A Home atual do PWA
+    // compartilha a paleta multicolorida, mas passa a usar exatamente os fundos
+    // Glass Soft publicados pelo Mestre. Não existe mais limite de 5 fundos.
+    const glassBackgrounds = parseBackgroundEntries(backgroundMap.glass);
+    if (glassBackgrounds.length) {
+      themeBackgrounds.multicolor = glassBackgrounds;
     }
   }
 
-  const remoteTheme = typeof raw.appearanceTheme === "string" ? raw.appearanceTheme.trim() : "";
+  const remoteThemeRaw = typeof raw.appearanceTheme === "string" ? raw.appearanceTheme.trim() : "";
+  const remoteTheme: RemoteThemeKey = remoteThemeRaw === "glass"
+    ? "glass"
+    : THEME_KEYS.includes(remoteThemeRaw as ThemeKey)
+      ? (remoteThemeRaw as ThemeKey)
+      : DEFAULT_SETTINGS.theme;
+  const effectiveTheme: ThemeKey = remoteTheme === "glass" ? "multicolor" : remoteTheme;
   const remoteMode = typeof raw.appearanceMode === "string" ? raw.appearanceMode.trim() : "";
   const asBoundedInt = (value: unknown, fallback: number, minimum: number, maximum: number) =>
     typeof value === "number" ? Math.min(maximum, Math.max(minimum, Math.round(value))) : fallback;
 
   return {
     overrideLocalTheme: raw.appearanceOverrideLocalTheme === true,
-    theme: THEME_KEYS.includes(remoteTheme as ThemeKey) ? (remoteTheme as ThemeKey) : DEFAULT_SETTINGS.theme,
+    theme: effectiveTheme,
+    remoteTheme,
     appearanceMode: ["system", "light", "dark"].includes(remoteMode)
       ? (remoteMode as AppearanceSettings["appearanceMode"])
       : DEFAULT_SETTINGS.appearanceMode,
