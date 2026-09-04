@@ -1,0 +1,8 @@
+
+> nrdlojas-pwa-rebuild@1.0.0 check /home/runner/work/bichocutela.github.io/bichocutela.github.io/source
+> tsc --noEmit
+
+client/src/components/ManagementPanel.tsx(207,16): error TS2802: Type 'MapIterator<[string, ManagedProduct[]]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+client/src/components/ManagementPanel.tsx(213,42): error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+client/src/components/ManagementPanel.tsx(418,32): error TS7006: Parameter 'item' implicitly has an 'any' type.
+ ELIFECYCLE  Command failed with exit code 2.
