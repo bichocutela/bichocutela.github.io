@@ -39,8 +39,20 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Validar TypeScript
+        id: typecheck
+        continue-on-error: true
         working-directory: source
-        run: pnpm check
+        run: pnpm check > ../.github/admin-products-typecheck.txt 2>&1
+
+      - name: Registrar erro de TypeScript
+        if: steps.typecheck.outcome == 'failure'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/admin-products-typecheck.txt
+          git commit -m "chore(pwa): registrar erro de validação"
+          git push
+          exit 1
 
       - name: Validar build
         working-directory: source
