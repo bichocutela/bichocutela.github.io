@@ -1,4 +1,5 @@
 name: Aplicar correção PWA temas e painel
+# execução final: fundos isolados por tema
 
 on:
   push:
@@ -29,6 +30,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Nenhuma alteração necessária."
           else
-            git commit -m "fix(pwa): liberar temas e limitar Mestre aos fundos"
+            git commit -m "fix(pwa): isolar fundos Glass Soft por tema"
             git push
           fi
