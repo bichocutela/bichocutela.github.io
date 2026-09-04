@@ -1,5 +1,5 @@
 name: Aplicar correção PWA temas e painel
-# execução definitiva: sem ponte Glass para Multicolor
+# execução: contraste do painel administrativo conforme o tema local
 
 on:
   push:
@@ -22,14 +22,39 @@ jobs:
       - name: Aplicar correção
         run: python3 .github/scripts/patch_pwa_theme_panel.py
 
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Instalar dependências
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+
+      - name: Validar TypeScript
+        working-directory: source
+        run: pnpm check
+
+      - name: Validar build
+        working-directory: source
+        run: pnpm exec vite build
+
       - name: Commitar alterações
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add source/client/src/lib/nrd.ts
+          git add source/client/src/components/ManagementPanel.tsx source/client/src/components/ManagementPanel.css source/client/src/pages/Home.tsx
+          git diff --cached --check
           if git diff --cached --quiet; then
             echo "Nenhuma alteração necessária."
           else
-            git commit -m "fix(pwa): separar fundo Glass Soft do Multicolor"
+            git commit -m "fix(pwa): alinhar painel administrativo ao tema"
             git push
           fi
