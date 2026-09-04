@@ -1,0 +1,165 @@
+name: Corrigir contraste do painel administrativo PWA
+
+on:
+  push:
+    branches:
+      - temp/pwa-admin-theme-contrast
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Aplicar correções de tema e login
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          panel = Path('source/client/src/components/ManagementPanel.tsx')
+          home = Path('source/client/src/pages/Home.tsx')
+          css = Path('source/client/src/components/ManagementPanel.css')
+
+          panel_text = panel.read_text(encoding='utf-8')
+          old_placeholder = 'placeholder="admin ou mestre"'
+          if old_placeholder not in panel_text:
+              raise SystemExit('Placeholder antigo não encontrado no ManagementPanel.tsx')
+          panel_text = panel_text.replace(old_placeholder, 'placeholder="Faça Login"', 1)
+          panel.write_text(panel_text, encoding='utf-8')
+
+          home_text = home.read_text(encoding='utf-8')
+          old_effect = '''  useEffect(() => {\n    const root = document.documentElement;\n    root.classList.toggle("nrd-glass-soft-active", effectiveTheme === "glass");\n    return () => root.classList.remove("nrd-glass-soft-active");\n  }, [effectiveTheme]);'''
+          new_effect = '''  useEffect(() => {\n    const root = document.documentElement;\n    root.classList.toggle("nrd-glass-soft-active", effectiveTheme === "glass");\n    root.dataset.nrdTheme = effectiveTheme;\n    root.style.setProperty("--nrd-theme-accent", accent);\n    return () => {\n      root.classList.remove("nrd-glass-soft-active");\n      delete root.dataset.nrdTheme;\n      root.style.removeProperty("--nrd-theme-accent");\n    };\n  }, [effectiveTheme, accent]);'''
+          if old_effect not in home_text:
+              raise SystemExit('Bloco de sincronização de tema não encontrado em Home.tsx')
+          home_text = home_text.replace(old_effect, new_effect, 1)
+          home.write_text(home_text, encoding='utf-8')
+
+          css_text = css.read_text(encoding='utf-8')
+          marker = '/* Sincronização visual do Painel Administrativo com o tema local do PWA */'
+          if marker not in css_text:
+              css_text += r'''
+
+/* Sincronização visual do Painel Administrativo com o tema local do PWA */
+.nrd-management-backdrop{
+  --nrd-management-accent:var(--nrd-theme-accent,#23834a);
+  --nrd-management-action:color-mix(in srgb,var(--nrd-management-accent) 82%,#111 18%);
+  --nrd-management-soft:color-mix(in srgb,var(--nrd-management-accent) 9%,#fff 91%);
+  --nrd-management-border:color-mix(in srgb,var(--nrd-management-accent) 24%,#d5dde3 76%);
+}
+.nrd-management-header{
+  background:linear-gradient(135deg,var(--nrd-management-action),color-mix(in srgb,var(--nrd-management-accent) 58%,#111 42%));
+  color:#fff;
+}
+.nrd-management-header p,.nrd-management-header h2,.nrd-management-icon{color:#fff}
+.nrd-management-icon{background:rgba(255,255,255,.18)}
+.nrd-management-nav button.is-active,
+.nrd-management-form-actions button:last-child,
+.nrd-management-primary,
+.nrd-management-filter-row button.is-selected,
+.nrd-management-login form>button{
+  background:var(--nrd-management-action);
+  border-color:var(--nrd-management-action);
+  color:#fff;
+}
+.nrd-management-login>svg,.nrd-management-search>svg{color:var(--nrd-management-action)}
+.nrd-management-switch-row input,.nrd-management-slider input{accent-color:var(--nrd-management-action)}
+.nrd-management-bulk{background:color-mix(in srgb,var(--nrd-management-accent) 11%,transparent)}
+.nrd-management-login{
+  border-color:var(--nrd-management-border);
+  box-shadow:0 10px 32px color-mix(in srgb,var(--nrd-management-accent) 10%,rgba(20,35,50,.08));
+}
+.nrd-management-session,.nrd-management-nav{border-color:var(--nrd-management-border)}
+.nrd-management-session>span svg{color:var(--nrd-management-action)}
+.nrd-management-session button:focus-visible,
+.nrd-management-nav button:focus-visible,
+.nrd-management-login input:focus,
+.nrd-management-search input:focus,
+.nrd-management-form-grid input:focus,
+.nrd-management-form-grid select:focus,
+.nrd-management-form-grid textarea:focus{
+  outline:3px solid color-mix(in srgb,var(--nrd-management-accent) 22%,transparent);
+  outline-offset:1px;
+  border-color:var(--nrd-management-action);
+}
+.nrd-management-login input::placeholder,
+.nrd-management-search input::placeholder,
+.nrd-management-form-grid input::placeholder{
+  color:#68737e;
+  opacity:1;
+}
+.dark .nrd-management-login input::placeholder,
+.dark .nrd-management-search input::placeholder,
+.dark .nrd-management-form-grid input::placeholder{color:#aab4bf}
+html[data-nrd-theme="glass"] .nrd-management-panel,
+html[data-nrd-theme="glass"] .nrd-management-login,
+html[data-nrd-theme="glass"] .nrd-management-card,
+html[data-nrd-theme="glass"] .nrd-management-form-card,
+html[data-nrd-theme="glass"] .nrd-management-metric,
+html[data-nrd-theme="glass"] .nrd-management-action-card{
+  backdrop-filter:blur(18px) saturate(1.08);
+  -webkit-backdrop-filter:blur(18px) saturate(1.08);
+}
+'''
+          css.write_text(css_text, encoding='utf-8')
+
+          # Guardas contra regressão visual.
+          checks = {
+              panel: ['placeholder="Faça Login"'],
+              home: ['--nrd-theme-accent', 'root.dataset.nrdTheme = effectiveTheme'],
+              css: [marker, '--nrd-management-action', '.nrd-management-nav button.is-active'],
+          }
+          for path, needles in checks.items():
+              text = path.read_text(encoding='utf-8')
+              missing = [needle for needle in needles if needle not in text]
+              if missing:
+                  raise SystemExit(f'{path}: validação falhou: {missing}')
+          PY
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Instalar dependências
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+
+      - name: Validar TypeScript
+        working-directory: source
+        run: pnpm check
+
+      - name: Validar build do PWA
+        working-directory: source
+        run: pnpm exec vite build
+
+      - name: Commitar correção na main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/client/src/components/ManagementPanel.tsx source/client/src/components/ManagementPanel.css source/client/src/pages/Home.tsx
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "Nenhuma alteração necessária."
+            exit 0
+          fi
+          git commit -m "fix(pwa): alinhar painel administrativo ao tema"
+          git push origin HEAD:main
+
+      - name: Remover branch temporária
+        if: success()
+        run: git push origin --delete temp/pwa-admin-theme-contrast || true
