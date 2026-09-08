@@ -1,0 +1,42 @@
+/* Ajustes exclusivos do Painel Mestre em telas de desktop. Mantém o comportamento mobile intacto. */
+@media (min-width: 1024px) {
+  .nrd-management-backdrop {
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    box-sizing: border-box;
+  }
+
+  .nrd-management-panel {
+    width: min(1180px, calc(100vw - 56px));
+    height: min(860px, calc(100vh - 56px));
+    max-height: calc(100vh - 56px);
+    border-radius: 22px;
+    box-shadow: 0 24px 80px rgba(0,0,0,.28);
+    overflow: hidden;
+  }
+
+  .nrd-management-header {
+    padding: 14px 20px;
+  }
+
+  .nrd-management-session {
+    padding: 8px 16px;
+  }
+
+  .nrd-management-nav {
+    padding: 8px 14px;
+  }
+
+  .nrd-management-content {
+    padding: 16px 20px 32px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .nrd-management-panel {
+    width: min(1240px, calc(100vw - 96px));
+    height: min(900px, calc(100vh - 72px));
+    max-height: calc(100vh - 72px);
+  }
+}
