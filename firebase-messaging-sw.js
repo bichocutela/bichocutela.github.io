@@ -12,8 +12,13 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const CACHE_NAME = "nrd-codigos-shell-v8";
-const APP_SHELL = ["/", "/manifest.webmanifest"];
+const CACHE_NAME = "nrd-codigos-shell-v9";
+const APP_SHELL = [
+  "/",
+  "/manifest.webmanifest",
+  "/assets/index-Boh7fsCr.js",
+  "/assets/index-CYedQqpd.css",
+];
 const PREFERENCES_DB = "nrd-pwa-preferences";
 const PREFERENCES_STORE = "settings";
 const PREFERENCES_KEY = "notifications";
@@ -89,6 +94,47 @@ const markNotificationAsRead = async (id) => {
   });
 };
 
+const cacheResponse = async (cache, request, response) => {
+  if (response && response.ok && response.type === "basic") {
+    await cache.put(request, response.clone());
+  }
+  return response;
+};
+
+const staleWhileRevalidate = async (event, request) => {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+  const network = fetch(request)
+    .then((response) => cacheResponse(cache, request, response))
+    .catch(() => undefined);
+
+  if (cached) {
+    event.waitUntil(network);
+    return cached;
+  }
+
+  const fresh = await network;
+  return fresh || caches.match("/");
+};
+
+const serveNavigation = async (event, request) => {
+  const cache = await caches.open(CACHE_NAME);
+  const cachedHome = await cache.match("/");
+  const network = fetch(request)
+    .then(async (response) => {
+      if (response && response.ok) await cache.put("/", response.clone());
+      return response;
+    })
+    .catch(() => undefined);
+
+  if (cachedHome) {
+    event.waitUntil(network);
+    return cachedHome;
+  }
+
+  return (await network) || Response.error();
+};
+
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
   self.skipWaiting();
@@ -106,8 +152,25 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request).then((cached) => cached || caches.match("/"))));
+  const request = event.request;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(serveNavigation(event, request));
+    return;
+  }
+
+  if (url.pathname.startsWith("/assets/")) {
+    event.respondWith(staleWhileRevalidate(event, request));
+    return;
+  }
+
+  event.respondWith(
+    fetch(request).catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
+  );
 });
 
 messaging.onBackgroundMessage(async (payload) => {
