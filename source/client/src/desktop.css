@@ -1,0 +1,83 @@
+/* Ajuste exclusivo para desktop: mantém o PWA com aparência de site, sem ampliar a interface móvel.
+   Em telas de telefone/tablet estreitas, o layout original continua intacto. */
+@media (min-width: 1024px) {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    background: #f2f4f2;
+  }
+
+  .nrd-app {
+    width: 100%;
+    min-height: 100vh;
+    margin: 0 auto;
+    font-size: 1rem;
+  }
+
+  .nrd-hero {
+    width: min(72rem, calc(100% - 3rem));
+    max-height: none;
+    margin: 1.5rem auto 0;
+    border-radius: 1.5rem;
+  }
+
+  .nrd-hero__content {
+    padding: 0.9rem 1rem 0;
+  }
+
+  .nrd-search-panel {
+    width: min(52rem, calc(100% - 3rem));
+    margin-top: 1.5rem;
+  }
+
+  .nrd-content,
+  .nrd-feature-band {
+    width: min(76rem, calc(100% - 3rem));
+  }
+
+  .nrd-content {
+    margin-top: 2rem;
+  }
+
+  .nrd-section-heading h1 {
+    font-size: 2rem;
+  }
+
+  .nrd-product-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .nrd-feature-band {
+    grid-template-columns: 20rem 1fr;
+  }
+
+  .nrd-footer {
+    margin-top: 2rem;
+    padding-left: max(1.5rem, calc((100% - 76rem) / 2));
+    padding-right: max(1.5rem, calc((100% - 76rem) / 2));
+  }
+
+  .nrd-modal-backdrop {
+    place-items: center;
+    padding: 1.5rem;
+  }
+
+  .nrd-modal {
+    border-radius: 1.4rem;
+  }
+}
+
+@media (min-width: 1440px) {
+  .nrd-hero {
+    width: min(78rem, calc(100% - 5rem));
+  }
+
+  .nrd-content,
+  .nrd-feature-band {
+    width: min(82rem, calc(100% - 5rem));
+  }
+}
