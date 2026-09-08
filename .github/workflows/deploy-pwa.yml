@@ -1,5 +1,5 @@
 name: Publicar PWA
-# publicação acionada após melhorias do catálogo administrativo e sincronização do seletor de imagens/galeria do Painel Mestre
+# Publica o PWA com a mesma configuração pública de upload usada pelo Android.
 
 on:
   push:
@@ -47,8 +47,8 @@ jobs:
 
       - name: Gerar PWA
         env:
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: https://kkayksyzksexoarpfxyj.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYXlrc3l6a3NleG9hcnBmeHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxNTUzNTQsImV4cCI6MjEwMTczMTM1NH0.LQr5D-2BRg_BZYJg4ImCwIZguVcb0P0U6CwLwsJUV-w
         run: pnpm exec vite build
 
       - name: Publicar arquivos gerados
