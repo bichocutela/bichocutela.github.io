@@ -3,6 +3,7 @@ import App from "./App";
 import AboutFooter from "./components/AboutFooter";
 import ManagementPanel from "./components/ManagementPanel";
 import "./index.css";
+import "./desktop.css";
 import "./pages/PromotionsModal.css";
 import "./lib/barcodeEnhancer.css";
 import "./lib/barcodeEnhancer";
