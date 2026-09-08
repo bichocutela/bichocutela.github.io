@@ -11,8 +11,7 @@ import {
   writeBatch,
   type DocumentData,
 } from "firebase/firestore";
-import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
-import { nrdAuth, nrdDb, nrdStorage } from "@/lib/firebase";
+import { nrdAuth, nrdDb } from "@/lib/firebase";
 import { normalizeSearch, toCategoryId } from "@/lib/nrd";
 
 export type ManagementRole = "admin" | "mestre";
@@ -170,11 +169,52 @@ export async function fetchManagementData(includeMestreData: boolean): Promise<M
   return { settings, products, categories: parseCategories(settings), tabs, suggestions, snapshots };
 }
 
+const PWA_SUPABASE_URL = ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_SUPABASE_URL || "https://kkayksyzksexoarpfxyj.supabase.co").replace(/\/$/, "");
+const PWA_SUPABASE_ANON_KEY = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_SUPABASE_ANON_KEY || "";
+const MAX_UPLOAD_BYTES = 80 * 1024 * 1024;
+
 export async function uploadManagementImage(file: File, folder: string) {
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
-  const target = storageRef(nrdStorage, `${folder}/${Date.now()}-${crypto.randomUUID()}-${safeName}`);
-  await uploadBytes(target, file, { contentType: file.type || undefined });
-  return getDownloadURL(target);
+  if (!file || file.size <= 0) throw new Error("O arquivo selecionado está vazio ou não pôde ser lido.");
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Arquivo maior que 80 MB.");
+  if (!file.type.startsWith("image/")) throw new Error("Formato não suportado. Selecione uma imagem JPG, PNG ou WEBP.");
+  const user = nrdAuth.currentUser;
+  if (!user) throw new Error("Sessão do Mestre expirada. Entre novamente.");
+  if (!PWA_SUPABASE_ANON_KEY) throw new Error("Upload remoto do PWA não está configurado com a chave pública do Supabase.");
+
+  const token = await user.getIdToken(false);
+  const extensionFromName = file.name.split('.').pop()?.toLowerCase();
+  const extension = extensionFromName && /^[a-z0-9]{1,8}$/.test(extensionFromName)
+    ? extensionFromName
+    : file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+  const cleanFolder = folder.replace(/[^a-zA-Z0-9/_-]+/g, '-').replace(/^\/+|\/+$/g, '');
+  const remotePath = `dynamic-pages/pwa/${cleanFolder}/${Date.now()}_${crypto.randomUUID()}.${extension}`;
+  const formData = new FormData();
+  formData.append('path', remotePath);
+  formData.append('file', file, file.name || `upload.${extension}`);
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 120000);
+  try {
+    const response = await fetch(`${PWA_SUPABASE_URL}/functions/v1/upload-image`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${PWA_SUPABASE_ANON_KEY}`,
+        apikey: PWA_SUPABASE_ANON_KEY,
+        'x-firebase-token': token,
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({})) as { url?: string; error?: string };
+    if (!response.ok) throw new Error(payload.error || `Falha no upload (${response.status}).`);
+    if (!payload.url || !/^https?:\/\//i.test(payload.url)) throw new Error("O servidor não retornou a URL do arquivo.");
+    return payload.url;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new Error("O envio demorou demais e foi cancelado. Tente novamente.");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export async function saveManagedProduct(input: { originalCode?: string | null; code: string; name: string; category: string; unit: string; imageUrl?: string | null; imageFile?: File | null; previousSearchCount?: number }) {
