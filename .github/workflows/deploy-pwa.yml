@@ -1,5 +1,5 @@
 name: Publicar PWA
-# publicação acionada após melhorias do catálogo administrativo
+# publicação acionada após melhorias do catálogo administrativo e sincronização do seletor de imagens/galeria do Painel Mestre
 
 on:
   push:
