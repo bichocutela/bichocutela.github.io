@@ -225,15 +225,86 @@ export default function ProductConsultation() {
       || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   }
 
+  async function createBarcodeImageVariants(file: File) {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("imagem"));
+        image.src = url;
+      });
+
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      if (!sourceWidth || !sourceHeight) return [] as File[];
+
+      const specs = [
+        { crop: 0.82, centerY: 0.50, grayscale: false, contrast: 1.18 },
+        { crop: 0.70, centerY: 0.50, grayscale: true, contrast: 1.72 },
+        { crop: 0.48, centerY: 0.50, grayscale: true, contrast: 1.95 },
+        { crop: 0.62, centerY: 0.36, grayscale: true, contrast: 1.78 },
+        { crop: 0.62, centerY: 0.64, grayscale: true, contrast: 1.78 },
+        { crop: 1.00, centerY: 0.50, grayscale: true, contrast: 1.55 },
+      ];
+      const files: File[] = [];
+
+      for (let index = 0; index < specs.length; index += 1) {
+        const spec = specs[index];
+        const cropHeight = Math.max(1, Math.round(sourceHeight * spec.crop));
+        const center = Math.round(sourceHeight * spec.centerY);
+        const sy = Math.max(0, Math.min(sourceHeight - cropHeight, center - Math.round(cropHeight / 2)));
+        const targetWidth = Math.round(Math.min(2200, Math.max(1200, sourceWidth)));
+        const targetHeight = Math.max(1, Math.round(cropHeight * (targetWidth / sourceWidth)));
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const context = canvas.getContext("2d", { willReadFrequently: spec.grayscale });
+        if (!context) continue;
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, sy, sourceWidth, cropHeight, 0, 0, targetWidth, targetHeight);
+
+        if (spec.grayscale || spec.contrast !== 1) {
+          const pixels = context.getImageData(0, 0, targetWidth, targetHeight);
+          const data = pixels.data;
+          for (let i = 0; i < data.length; i += 4) {
+            const gray = Math.round(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+            const base = spec.grayscale ? gray : Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
+            const enhanced = Math.max(0, Math.min(255, Math.round((base - 128) * spec.contrast + 128)));
+            if (spec.grayscale) {
+              data[i] = enhanced;
+              data[i + 1] = enhanced;
+              data[i + 2] = enhanced;
+            } else {
+              const ratio = base ? enhanced / base : 1;
+              data[i] = Math.max(0, Math.min(255, Math.round(data[i] * ratio)));
+              data[i + 1] = Math.max(0, Math.min(255, Math.round(data[i + 1] * ratio)));
+              data[i + 2] = Math.max(0, Math.min(255, Math.round(data[i + 2] * ratio)));
+            }
+          }
+          context.putImageData(pixels, 0, 0);
+        }
+
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.96));
+        if (blob) files.push(new File([blob], `barcode-${index}.jpg`, { type: "image/jpeg" }));
+      }
+      return files;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
   async function scanNativeIosCapture(file: File) {
     setNativeCaptureBusy(true);
+    toast.message("Analisando código de barras...");
     const host = document.createElement("div");
     host.id = `nrd-ios-file-scanner-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     host.style.position = "fixed";
     host.style.left = "-10000px";
     host.style.top = "-10000px";
-    host.style.width = "360px";
-    host.style.height = "360px";
+    host.style.width = "480px";
+    host.style.height = "480px";
     host.style.opacity = "0";
     host.style.pointerEvents = "none";
     document.body.appendChild(host);
@@ -241,12 +312,21 @@ export default function ProductConsultation() {
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
       const scanner = new Html5Qrcode(host.id, { verbose: false });
-      const code = (await scanner.scanFile(file, false)).trim();
+      const candidates = [file, ...(await createBarcodeImageVariants(file))];
+      let code = "";
+      for (const candidate of candidates) {
+        try {
+          code = (await scanner.scanFile(candidate, false)).trim();
+          if (code) break;
+        } catch {
+          // Tenta a próxima variação: recorte, escala e contraste diferentes.
+        }
+      }
       try { await scanner.clear(); } catch { /* limpeza opcional */ }
       if (!code) throw new Error("Código vazio");
       onScanned(code);
     } catch {
-      toast.error("Não consegui identificar o código. Centralize o código de barras e tente novamente.");
+      toast.error("Não consegui identificar o código. Aproxime um pouco mais e mantenha as barras inteiras na foto.");
     } finally {
       host.remove();
       setNativeCaptureBusy(false);
@@ -483,7 +563,7 @@ function CameraScanner({ onDetected, onClose }: { onDetected: (code: string) => 
       const scanner = new Html5Qrcode(elementId, { verbose: false });
       scannerRef.current = scanner;
       setStatus("Aponte a câmera para o código de barras");
-      await scanner.start({ facingMode: "environment" }, { fps: 12, qrbox: { width: 280, height: 140 }, aspectRatio: 1.777 }, async (code) => {
+      await scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: { width: 320, height: 180 }, aspectRatio: 1.777 }, async (code) => {
         if (!code.trim() || stopped.current) return;
         await stop();
         onDetected(code.trim());
