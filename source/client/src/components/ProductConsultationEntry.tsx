@@ -1,7 +1,10 @@
 import { useEffect } from "react";
+import { useLocation } from "wouter";
 
-/** Mantém a entrada da consulta junto à navegação principal sem acoplar o menu ao painel administrativo. */
+/** Mantém a entrada da consulta junto à navegação principal sem recarregar o GitHub Pages. */
 export default function ProductConsultationEntry() {
+  const [, navigate] = useLocation();
+
   useEffect(() => {
     const install = () => {
       const drawer = document.querySelector<HTMLElement>(".nrd-drawer");
@@ -14,7 +17,7 @@ export default function ProductConsultationEntry() {
       button.className = "nrd-drawer-link";
       button.dataset.nrdProductConsultation = "true";
       button.innerHTML = '<span aria-hidden="true" style="font-size:17px;line-height:1">🔎</span> Consultar Produtos <span aria-hidden="true" style="margin-left:auto">›</span>';
-      button.onclick = () => window.location.assign("/consultar-produtos");
+      button.onclick = () => navigate("/consultar-produtos");
       homeButton.insertAdjacentElement("afterend", button);
     };
     install();
@@ -24,6 +27,6 @@ export default function ProductConsultationEntry() {
       observer.disconnect();
       document.querySelectorAll("[data-nrd-product-consultation='true']").forEach((node) => node.remove());
     };
-  }, []);
+  }, [navigate]);
   return null;
 }
