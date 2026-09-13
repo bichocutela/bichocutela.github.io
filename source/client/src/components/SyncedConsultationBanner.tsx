@@ -1,3 +1,4 @@
+/** Compartilha em tempo real o mesmo banner configurado no Android para Consultar Preços. */
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { nrdDb } from "@/lib/firebase";
