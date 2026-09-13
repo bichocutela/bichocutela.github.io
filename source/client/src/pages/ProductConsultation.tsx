@@ -220,11 +220,9 @@ export default function ProductConsultation() {
     void runSearch(0, true, clean, "");
   }
 
-  function isInstalledIosPwa() {
-    const nav = navigator as Navigator & { standalone?: boolean };
-    const ios = /iPad|iPhone|iPod/i.test(navigator.userAgent)
+  function isIosDevice() {
+    return /iPad|iPhone|iPod/i.test(navigator.userAgent)
       || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    return ios && (nav.standalone === true || window.matchMedia("(display-mode: standalone)").matches);
   }
 
   async function scanNativeIosCapture(file: File) {
@@ -257,12 +255,6 @@ export default function ProductConsultation() {
   }
 
   function openCameraScanner() {
-    // WebKit ainda apresenta falhas intermitentes de getUserMedia em PWAs instalados no iPhone.
-    // Nesse modo usamos a câmera nativa do iOS para capturar a imagem e decodificamos localmente.
-    if (isInstalledIosPwa()) {
-      nativeCaptureInputRef.current?.click();
-      return;
-    }
     setCameraOpen(true);
   }
 
@@ -287,18 +279,21 @@ export default function ProductConsultation() {
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, código ou cód. de barras" autoComplete="off" inputMode="search" />
           {query && <button onClick={() => setQuery("")} aria-label="Limpar"><X size={18} /></button>}
         </label>
-        <button className="pc-camera-button" onClick={openCameraScanner} disabled={nativeCaptureBusy} aria-label="Ler código pela câmera"><Camera /></button>
-        <input
-          ref={nativeCaptureInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0];
-            if (file) void scanNativeIosCapture(file);
-          }}
-        />
+        {isIosDevice() ? <label className={`pc-camera-button pc-native-camera-button${nativeCaptureBusy ? " is-disabled" : ""}`} aria-label="Ler código pela câmera">
+          <Camera />
+          <input
+            ref={nativeCaptureInputRef}
+            className="pc-native-camera-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            disabled={nativeCaptureBusy}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) void scanNativeIosCapture(file);
+            }}
+          />
+        </label> : <button className="pc-camera-button" onClick={openCameraScanner} aria-label="Ler código pela câmera"><Camera /></button>}
       </div>
       <div className="pc-search-actions">
         <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} aria-label="Filtrar categoria">
