@@ -6,13 +6,19 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
-  "theme_color": "#c81e1e",
+  "theme_color": "#23834A",
   "icons": [
     {
-      "src": "/manus-storage/247858_40459510.png?v=original-transparent-v4",
+      "src": "/manus-storage/nrd-icon-original-user_0cf71537.png",
       "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/nrd-icon-original-user_0cf71537.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
