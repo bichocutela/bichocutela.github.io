@@ -1,0 +1,88 @@
+name: Corrigir acionamento da câmera no iPhone
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-iphone-native-camera-trigger-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Instalar dependências
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+
+      - name: Aplicar acionamento nativo direto no iPhone
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path("source/client/src/pages/ProductConsultation.tsx")
+          s = p.read_text(encoding="utf-8")
+
+          old = '''  function isInstalledIosPwa() {\n    const nav = navigator as Navigator & { standalone?: boolean };\n    const ios = /iPad|iPhone|iPod/i.test(navigator.userAgent)\n      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);\n    return ios && (nav.standalone === true || window.matchMedia("(display-mode: standalone)").matches);\n  }'''
+          new = '''  function isIosDevice() {\n    return /iPad|iPhone|iPod/i.test(navigator.userAgent)\n      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);\n  }'''
+          if old not in s:
+              raise SystemExit("detector iOS alvo não encontrado")
+          s = s.replace(old, new, 1)
+
+          old = '''  function openCameraScanner() {\n    // WebKit ainda apresenta falhas intermitentes de getUserMedia em PWAs instalados no iPhone.\n    // Nesse modo usamos a câmera nativa do iOS para capturar a imagem e decodificamos localmente.\n    if (isInstalledIosPwa()) {\n      nativeCaptureInputRef.current?.click();\n      return;\n    }\n    setCameraOpen(true);\n  }'''
+          new = '''  function openCameraScanner() {\n    setCameraOpen(true);\n  }'''
+          if old not in s:
+              raise SystemExit("openCameraScanner alvo não encontrado")
+          s = s.replace(old, new, 1)
+
+          old = '''        <button className="pc-camera-button" onClick={openCameraScanner} disabled={nativeCaptureBusy} aria-label="Ler código pela câmera"><Camera /></button>\n        <input\n          ref={nativeCaptureInputRef}\n          type="file"\n          accept="image/*"\n          capture="environment"\n          hidden\n          onChange={(event) => {\n            const file = event.currentTarget.files?.[0];\n            if (file) void scanNativeIosCapture(file);\n          }}\n        />'''
+          new = '''        {isIosDevice() ? <label className={`pc-camera-button pc-native-camera-button${nativeCaptureBusy ? " is-disabled" : ""}`} aria-label="Ler código pela câmera">\n          <Camera />\n          <input\n            ref={nativeCaptureInputRef}\n            className="pc-native-camera-input"\n            type="file"\n            accept="image/*"\n            capture="environment"\n            disabled={nativeCaptureBusy}\n            onChange={(event) => {\n              const file = event.currentTarget.files?.[0];\n              if (file) void scanNativeIosCapture(file);\n            }}\n          />\n        </label> : <button className="pc-camera-button" onClick={openCameraScanner} aria-label="Ler código pela câmera"><Camera /></button>}'''
+          if old not in s:
+              raise SystemExit("controle de câmera alvo não encontrado")
+          s = s.replace(old, new, 1)
+
+          p.write_text(s, encoding="utf-8")
+
+          css = Path("source/client/src/pages/ProductConsultation.css")
+          c = css.read_text(encoding="utf-8")
+          anchor = '.pc-camera-button{height:54px;border-radius:20px;background:#b49116;color:#fff;box-shadow:0 4px 14px rgba(180,145,22,.25)}'
+          replacement = anchor + '.pc-native-camera-button{position:relative;overflow:hidden;cursor:pointer}.pc-native-camera-button.is-disabled{opacity:.55;pointer-events:none}.pc-native-camera-input{position:absolute;inset:0;width:100%;height:100%;opacity:.001;cursor:pointer;font-size:0;border:0;padding:0;margin:0}'
+          if anchor not in c:
+              raise SystemExit("CSS da câmera alvo não encontrado")
+          c = c.replace(anchor, replacement, 1)
+          css.write_text(c, encoding="utf-8")
+
+          Path(".github/workflows/fix-iphone-native-camera-trigger-once.yml").unlink()
+          PY
+
+      - name: Validar TypeScript e build
+        working-directory: source
+        run: |
+          pnpm check
+          pnpm exec vite build
+
+      - name: Commit e push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/client/src/pages/ProductConsultation.tsx source/client/src/pages/ProductConsultation.css .github/workflows/fix-iphone-native-camera-trigger-once.yml
+          git commit -m "Corrige acionamento nativo da câmera no iPhone"
+          git push
