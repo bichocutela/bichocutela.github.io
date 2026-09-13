@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NRD Códigos</title>
+</head>
+<body>
+  <script>
+    (function () {
+      var target = location.pathname + location.search + location.hash;
+      try { sessionStorage.setItem("nrd-spa-redirect", target); } catch (_) {}
+      location.replace("/");
+    })();
+  </script>
+  <noscript>Abra a página inicial do NRD Códigos.</noscript>
+</body>
+</html>
