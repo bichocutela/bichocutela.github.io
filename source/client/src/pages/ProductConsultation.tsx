@@ -43,7 +43,7 @@ type Html5QrcodeLike = {
     config: { fps: number; qrbox: { width: number; height: number }; aspectRatio?: number },
     success: (decodedText: string) => void,
     failure?: () => void,
-  ) => Promise<void>;
+  ) => Promise<void | null>;
   stop: () => Promise<void>;
   clear: () => void;
 };
@@ -107,6 +107,8 @@ export default function ProductConsultation() {
   const [addOpen, setAddOpen] = useState(false);
   const requestSequence = useRef(0);
   const skipNextDebouncedSearch = useRef<string | null>(null);
+  const nativeCaptureInputRef = useRef<HTMLInputElement>(null);
+  const [nativeCaptureBusy, setNativeCaptureBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -218,6 +220,52 @@ export default function ProductConsultation() {
     void runSearch(0, true, clean, "");
   }
 
+  function isInstalledIosPwa() {
+    const nav = navigator as Navigator & { standalone?: boolean };
+    const ios = /iPad|iPhone|iPod/i.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return ios && (nav.standalone === true || window.matchMedia("(display-mode: standalone)").matches);
+  }
+
+  async function scanNativeIosCapture(file: File) {
+    setNativeCaptureBusy(true);
+    const host = document.createElement("div");
+    host.id = `nrd-ios-file-scanner-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    host.style.position = "fixed";
+    host.style.left = "-10000px";
+    host.style.top = "-10000px";
+    host.style.width = "360px";
+    host.style.height = "360px";
+    host.style.opacity = "0";
+    host.style.pointerEvents = "none";
+    document.body.appendChild(host);
+
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode(host.id, { verbose: false });
+      const code = (await scanner.scanFile(file, false)).trim();
+      try { await scanner.clear(); } catch { /* limpeza opcional */ }
+      if (!code) throw new Error("Código vazio");
+      onScanned(code);
+    } catch {
+      toast.error("Não consegui identificar o código. Centralize o código de barras e tente novamente.");
+    } finally {
+      host.remove();
+      setNativeCaptureBusy(false);
+      if (nativeCaptureInputRef.current) nativeCaptureInputRef.current.value = "";
+    }
+  }
+
+  function openCameraScanner() {
+    // WebKit ainda apresenta falhas intermitentes de getUserMedia em PWAs instalados no iPhone.
+    // Nesse modo usamos a câmera nativa do iOS para capturar a imagem e decodificamos localmente.
+    if (isInstalledIosPwa()) {
+      nativeCaptureInputRef.current?.click();
+      return;
+    }
+    setCameraOpen(true);
+  }
+
   const resultLabel = useMemo(() => {
     if (!query.trim()) return "Digite o nome, código ou código de barras";
     if (loading && !page.items.length) return "Buscando produtos...";
@@ -239,7 +287,18 @@ export default function ProductConsultation() {
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, código ou cód. de barras" autoComplete="off" inputMode="search" />
           {query && <button onClick={() => setQuery("")} aria-label="Limpar"><X size={18} /></button>}
         </label>
-        <button className="pc-camera-button" onClick={() => setCameraOpen(true)} aria-label="Ler código pela câmera"><Camera /></button>
+        <button className="pc-camera-button" onClick={openCameraScanner} disabled={nativeCaptureBusy} aria-label="Ler código pela câmera"><Camera /></button>
+        <input
+          ref={nativeCaptureInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) void scanNativeIosCapture(file);
+          }}
+        />
       </div>
       <div className="pc-search-actions">
         <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} aria-label="Filtrar categoria">
@@ -423,23 +482,8 @@ function CameraScanner({ onDetected, onClose }: { onDetected: (code: string) => 
       };
       void loop();
     }
-    function loadHtml5Qrcode() {
-      return new Promise<Html5QrcodeConstructor>((resolve, reject) => {
-        if (scannerWindow.Html5Qrcode) return resolve(scannerWindow.Html5Qrcode);
-        const existing = document.querySelector<HTMLScriptElement>("script[data-nrd-html5-qrcode]");
-        const finish = () => scannerWindow.Html5Qrcode ? resolve(scannerWindow.Html5Qrcode) : reject(new Error("scanner"));
-        if (existing) { existing.addEventListener("load", finish, { once: true }); existing.addEventListener("error", () => reject(new Error("scanner")), { once: true }); return; }
-        const script = document.createElement("script");
-        script.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
-        script.async = true;
-        script.dataset.nrdHtml5Qrcode = "true";
-        script.onload = finish;
-        script.onerror = () => reject(new Error("scanner"));
-        document.head.appendChild(script);
-      });
-    }
     async function fallbackScan() {
-      const Html5Qrcode = await loadHtml5Qrcode();
+      const { Html5Qrcode } = await import("html5-qrcode");
       if (stopped.current) return;
       const scanner = new Html5Qrcode(elementId, { verbose: false });
       scannerRef.current = scanner;

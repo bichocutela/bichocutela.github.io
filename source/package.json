@@ -47,6 +47,7 @@
     "express": "^4.21.2",
     "firebase": "^12.18.0",
     "framer-motion": "^12.23.22",
+    "html5-qrcode": "2.3.8",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.453.0",
     "nanoid": "^5.1.5",
