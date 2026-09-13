@@ -40,6 +40,12 @@ jobs:
           p = Path("source/client/src/pages/ProductConsultation.tsx")
           s = p.read_text(encoding="utf-8")
 
+          old = '''  ) => Promise<void>;\n  stop: () => Promise<void>;'''
+          new = '''  ) => Promise<void | null>;\n  stop: () => Promise<void>;'''
+          if old not in s:
+              raise SystemExit("tipagem do scanner alvo não encontrada")
+          s = s.replace(old, new, 1)
+
           old = '''  const requestSequence = useRef(0);\n  const skipNextDebouncedSearch = useRef<string | null>(null);'''
           new = '''  const requestSequence = useRef(0);\n  const skipNextDebouncedSearch = useRef<string | null>(null);\n  const nativeCaptureInputRef = useRef<HTMLInputElement>(null);\n  const [nativeCaptureBusy, setNativeCaptureBusy] = useState(false);'''
           if old not in s:
