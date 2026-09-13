@@ -1,4 +1,5 @@
 /** NRD Lojas PWA: experiência mobile alinhada ao aplicativo Android. */
+import ProductConsultationEntry from "@/components/ProductConsultationEntry";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -25,6 +26,7 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
+          <ProductConsultationEntry />
           <Router />
         </TooltipProvider>
       </ThemeProvider>
