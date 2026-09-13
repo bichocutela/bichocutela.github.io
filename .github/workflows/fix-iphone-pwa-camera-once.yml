@@ -1,0 +1,85 @@
+name: Corrigir câmera do iPhone no PWA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-iphone-pwa-camera-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Instalar leitor local de códigos
+        working-directory: source
+        run: pnpm add --save-exact html5-qrcode@2.3.8
+
+      - name: Aplicar modo nativo para iPhone instalado como PWA
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path("source/client/src/pages/ProductConsultation.tsx")
+          s = p.read_text(encoding="utf-8")
+
+          old = '''  const requestSequence = useRef(0);\n  const skipNextDebouncedSearch = useRef<string | null>(null);'''
+          new = '''  const requestSequence = useRef(0);\n  const skipNextDebouncedSearch = useRef<string | null>(null);\n  const nativeCaptureInputRef = useRef<HTMLInputElement>(null);\n  const [nativeCaptureBusy, setNativeCaptureBusy] = useState(false);'''
+          if old not in s:
+              raise SystemExit("refs alvo não encontrados")
+          s = s.replace(old, new, 1)
+
+          old = '''  function onScanned(code: string) {\n    const clean = code.trim();\n    if (!clean) return;\n\n    // Igual ao Android: a leitura da câmera ignora filtros antigos e dispara a busca\n    // imediatamente. Não depende do debounce nem de uma segunda interação do usuário.\n    skipNextDebouncedSearch.current = `${clean}|`;\n    setCameraOpen(false);\n    setCategoryId("");\n    setQuery(clean);\n    toast.success("Código identificado. Consultando produto...");\n    void runSearch(0, true, clean, "");\n  }'''
+          new = '''  function onScanned(code: string) {\n    const clean = code.trim();\n    if (!clean) return;\n\n    // Igual ao Android: a leitura da câmera ignora filtros antigos e dispara a busca\n    // imediatamente. Não depende do debounce nem de uma segunda interação do usuário.\n    skipNextDebouncedSearch.current = `${clean}|`;\n    setCameraOpen(false);\n    setCategoryId("");\n    setQuery(clean);\n    toast.success("Código identificado. Consultando produto...");\n    void runSearch(0, true, clean, "");\n  }\n\n  function isInstalledIosPwa() {\n    const nav = navigator as Navigator & { standalone?: boolean };\n    const ios = /iPad|iPhone|iPod/i.test(navigator.userAgent)\n      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);\n    return ios && (nav.standalone === true || window.matchMedia("(display-mode: standalone)").matches);\n  }\n\n  async function scanNativeIosCapture(file: File) {\n    setNativeCaptureBusy(true);\n    const host = document.createElement("div");\n    host.id = `nrd-ios-file-scanner-${Date.now()}-${Math.random().toString(36).slice(2)}`;\n    host.style.position = "fixed";\n    host.style.left = "-10000px";\n    host.style.top = "-10000px";\n    host.style.width = "360px";\n    host.style.height = "360px";\n    host.style.opacity = "0";\n    host.style.pointerEvents = "none";\n    document.body.appendChild(host);\n\n    try {\n      const { Html5Qrcode } = await import("html5-qrcode");\n      const scanner = new Html5Qrcode(host.id, { verbose: false });\n      const code = (await scanner.scanFile(file, false)).trim();\n      try { await scanner.clear(); } catch { /* limpeza opcional */ }\n      if (!code) throw new Error("Código vazio");\n      onScanned(code);\n    } catch {\n      toast.error("Não consegui identificar o código. Centralize o código de barras e tente novamente.");\n    } finally {\n      host.remove();\n      setNativeCaptureBusy(false);\n      if (nativeCaptureInputRef.current) nativeCaptureInputRef.current.value = "";\n    }\n  }\n\n  function openCameraScanner() {\n    // WebKit ainda apresenta falhas intermitentes de getUserMedia em PWAs instalados no iPhone.\n    // Nesse modo usamos a câmera nativa do iOS para capturar a imagem e decodificamos localmente.\n    if (isInstalledIosPwa()) {\n      nativeCaptureInputRef.current?.click();\n      return;\n    }\n    setCameraOpen(true);\n  }'''
+          if old not in s:
+              raise SystemExit("onScanned alvo não encontrado")
+          s = s.replace(old, new, 1)
+
+          old = '''        <button className="pc-camera-button" onClick={() => setCameraOpen(true)} aria-label="Ler código pela câmera"><Camera /></button>'''
+          new = '''        <button className="pc-camera-button" onClick={openCameraScanner} disabled={nativeCaptureBusy} aria-label="Ler código pela câmera"><Camera /></button>\n        <input\n          ref={nativeCaptureInputRef}\n          type="file"\n          accept="image/*"\n          capture="environment"\n          hidden\n          onChange={(event) => {\n            const file = event.currentTarget.files?.[0];\n            if (file) void scanNativeIosCapture(file);\n          }}\n        />'''
+          if old not in s:
+              raise SystemExit("botão da câmera alvo não encontrado")
+          s = s.replace(old, new, 1)
+
+          start = s.find('    function loadHtml5Qrcode() {')
+          end = s.find('    async function start() {', start)
+          if start < 0 or end < 0:
+              raise SystemExit("fallback antigo não encontrado")
+          replacement = '''    async function fallbackScan() {\n      const { Html5Qrcode } = await import("html5-qrcode");\n      if (stopped.current) return;\n      const scanner = new Html5Qrcode(elementId, { verbose: false });\n      scannerRef.current = scanner;\n      setStatus("Aponte a câmera para o código de barras");\n      await scanner.start({ facingMode: "environment" }, { fps: 12, qrbox: { width: 280, height: 140 }, aspectRatio: 1.777 }, async (code) => {\n        if (!code.trim() || stopped.current) return;\n        await stop();\n        onDetected(code.trim());\n      }, () => undefined);\n    }\n'''
+          s = s[:start] + replacement + s[end:]
+
+          p.write_text(s, encoding="utf-8")
+          Path(".github/workflows/fix-iphone-pwa-camera-once.yml").unlink()
+          PY
+
+      - name: Validar TypeScript e build
+        working-directory: source
+        run: |
+          pnpm check
+          pnpm exec vite build
+
+      - name: Commit e push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/package.json source/pnpm-lock.yaml source/client/src/pages/ProductConsultation.tsx .github/workflows/fix-iphone-pwa-camera-once.yml
+          git commit -m "Corrige câmera do PWA no iPhone"
+          git push
