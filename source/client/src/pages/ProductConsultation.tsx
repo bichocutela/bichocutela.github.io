@@ -16,6 +16,7 @@ import {
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { nrdAuth } from "@/lib/firebase";
+import SyncedConsultationBanner from "@/components/SyncedConsultationBanner";
 import {
   addConsultationProductToNrd,
   configureConsultation,
@@ -35,8 +36,6 @@ import {
 } from "@/lib/productConsultation";
 import type { ManagedCategory, ManagementRole } from "@/lib/managementData";
 import "./ProductConsultation.css";
-
-const bannerUrl = "/manus-storage/nrd-banner-multicolor-original_62abf744.jpg";
 
 type Html5QrcodeLike = {
   start: (
@@ -214,7 +213,7 @@ export default function ProductConsultation() {
   return <main className="pc-page">
     <header className="pc-header">
       <button className="pc-icon-button" onClick={() => navigate("/")} aria-label="Voltar"><ArrowLeft /></button>
-      <div className="pc-banner"><img src={bannerUrl} alt="Consultar Preços" /><div><strong>Consultar Preços</strong><span>Preço, condições e ofertas em um só lugar</span></div></div>
+      <SyncedConsultationBanner />
       {role && <button className="pc-icon-button" onClick={() => setConfigureOpen(true)} aria-label="Configurar consulta"><Settings2 /></button>}
     </header>
 
