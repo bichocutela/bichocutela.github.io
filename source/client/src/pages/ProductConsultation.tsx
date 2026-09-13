@@ -106,6 +106,7 @@ export default function ProductConsultation() {
   const [configureOpen, setConfigureOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const requestSequence = useRef(0);
+  const skipNextDebouncedSearch = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -119,8 +120,9 @@ export default function ProductConsultation() {
     return () => { alive = false; unsubscribe(); };
   }, []);
 
-  async function runSearch(targetPage = 0, fresh = false) {
-    const clean = query.trim();
+  async function runSearch(targetPage = 0, fresh = false, searchOverride?: string, categoryOverride?: string) {
+    const clean = (searchOverride ?? query).trim();
+    const activeCategoryId = categoryOverride ?? categoryId;
     if (clean.length < 2) {
       setPage(emptyPage());
       setError("");
@@ -130,7 +132,7 @@ export default function ProductConsultation() {
     setLoading(true);
     setError("");
     try {
-      const result = await searchConsultationProducts(clean, targetPage, categoryId, fresh);
+      const result = await searchConsultationProducts(clean, targetPage, activeCategoryId, fresh);
       if (sequence !== requestSequence.current) return;
       setPage(result);
       if (result.items.length === 1 && /^\d+$/.test(clean)) void openProduct(result.items[0]);
@@ -149,6 +151,11 @@ export default function ProductConsultation() {
       setPage(emptyPage());
       setLoading(false);
       setError("");
+      return;
+    }
+    const searchKey = `${query.trim()}|${categoryId}`;
+    if (skipNextDebouncedSearch.current === searchKey) {
+      skipNextDebouncedSearch.current = null;
       return;
     }
     const timer = window.setTimeout(() => { void runSearch(0, false); }, 180);
@@ -198,9 +205,17 @@ export default function ProductConsultation() {
   }
 
   function onScanned(code: string) {
+    const clean = code.trim();
+    if (!clean) return;
+
+    // Igual ao Android: a leitura da câmera ignora filtros antigos e dispara a busca
+    // imediatamente. Não depende do debounce nem de uma segunda interação do usuário.
+    skipNextDebouncedSearch.current = `${clean}|`;
     setCameraOpen(false);
-    setQuery(code.trim());
+    setCategoryId("");
+    setQuery(clean);
     toast.success("Código identificado. Consultando produto...");
+    void runSearch(0, true, clean, "");
   }
 
   const resultLabel = useMemo(() => {
