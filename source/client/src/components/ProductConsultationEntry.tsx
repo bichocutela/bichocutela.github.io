@@ -16,7 +16,7 @@ export default function ProductConsultationEntry() {
       button.type = "button";
       button.className = "nrd-drawer-link";
       button.dataset.nrdProductConsultation = "true";
-      button.innerHTML = '<span aria-hidden="true" style="font-size:17px;line-height:1">🔎</span> Consultar Produtos <span aria-hidden="true" style="margin-left:auto">›</span>';
+      button.innerHTML = '<span aria-hidden="true" style="font-size:17px;line-height:1">🔎</span> Consultar Preços <span aria-hidden="true" style="margin-left:auto">›</span>';
       button.onclick = () => navigate("/consultar-produtos");
       homeButton.insertAdjacentElement("afterend", button);
     };
