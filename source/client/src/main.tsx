@@ -5,6 +5,7 @@ import "./index.css";
 import "./desktop.css";
 import "./lib/barcodeEnhancer.css";
 import "./lib/barcodeEnhancer";
+import "./lib/textSelection.css";
 import "./components/AboutFooter.css";
 
 // O build desta entrada publica também as preferências locais de tema e os fundos por tema.
