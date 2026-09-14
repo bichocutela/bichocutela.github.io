@@ -1,0 +1,248 @@
+name: Scanner PWA no fluxo do Android uma vez
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-android-style-scanner-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Instalar dependências
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+
+      - name: Aplicar scanner contínuo estilo Android
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('source/client/src/pages/ProductConsultation.tsx')
+          s = p.read_text(encoding='utf-8')
+          start = s.find('function CameraScanner(')
+          if start < 0:
+              raise SystemExit('CameraScanner não encontrado')
+
+          # O scanner fica no fim do arquivo. Substituímos toda a implementação anterior,
+          # inclusive qualquer fallback de <input capture>, por câmera ao vivo obrigatória.
+          scanner = r'''function CameraScanner({ onDetected, onClose }: { onDetected: (code: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const controlsRef = useRef<{ stop: () => void | Promise<void> } | null>(null);
+  const disposedRef = useRef(false);
+  const processingRef = useRef(false);
+  const consumedRef = useRef(false);
+  const [status, setStatus] = useState("Abrindo câmera traseira...");
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [torch, setTorch] = useState(false);
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const onDetectedRef = useRef(onDetected);
+
+  useEffect(() => { onDetectedRef.current = onDetected; }, [onDetected]);
+
+  useEffect(() => {
+    disposedRef.current = false;
+    processingRef.current = false;
+    consumedRef.current = false;
+    setError("");
+    setStatus("Abrindo câmera traseira...");
+    setTorch(false);
+    setTorchAvailable(false);
+
+    async function stopEverything() {
+      disposedRef.current = true;
+      try { await controlsRef.current?.stop(); } catch { /* já encerrado */ }
+      controlsRef.current = null;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      const video = videoRef.current;
+      if (video) {
+        try { video.pause(); } catch { /* noop */ }
+        video.srcObject = null;
+      }
+    }
+
+    async function startLiveScanner() {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("Este navegador não oferece câmera ao vivo.");
+        const video = videoRef.current;
+        if (!video) return;
+
+        // Mesma ideia do Android: primeiro abre/binda a câmera traseira e mantém o preview vivo.
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 360 },
+            frameRate: { ideal: 30, min: 15, max: 30 },
+          },
+        });
+        if (disposedRef.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        video.srcObject = stream;
+        video.setAttribute("playsinline", "true");
+        video.muted = true;
+        await video.play();
+
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          try {
+            const caps = (track.getCapabilities?.() ?? {}) as any;
+            const advanced: any[] = [];
+            if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) advanced.push({ focusMode: "continuous" });
+            if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) advanced.push({ exposureMode: "continuous" });
+            if (advanced.length) await track.applyConstraints({ advanced } as any);
+            setTorchAvailable(Boolean(caps.torch));
+          } catch { /* Safari pode ocultar capacidades */ }
+        }
+
+        const [{ BrowserMultiFormatReader }, zxing] = await Promise.all([
+          import("@zxing/browser"),
+          import("@zxing/library"),
+        ]);
+        if (disposedRef.current) return;
+
+        const hints = new Map<any, any>();
+        hints.set(zxing.DecodeHintType.POSSIBLE_FORMATS, [
+          zxing.BarcodeFormat.EAN_13,
+          zxing.BarcodeFormat.EAN_8,
+          zxing.BarcodeFormat.UPC_A,
+          zxing.BarcodeFormat.UPC_E,
+          zxing.BarcodeFormat.CODE_128,
+          zxing.BarcodeFormat.CODE_39,
+          zxing.BarcodeFormat.ITF,
+          zxing.BarcodeFormat.CODABAR,
+        ]);
+        hints.set(zxing.DecodeHintType.TRY_HARDER, true);
+
+        const reader = new BrowserMultiFormatReader(hints, {
+          delayBetweenScanAttempts: 16,
+          delayBetweenScanSuccess: 250,
+        });
+
+        setStatus("Aponte para um único código. A leitura é automática.");
+        const controls = await reader.decodeFromStream(stream, video, async (result) => {
+          if (!result || disposedRef.current || consumedRef.current || processingRef.current) return;
+          processingRef.current = true;
+          try {
+            const value = result.getText().trim();
+            if (!value || value.length > 128) return;
+            if ([...value].some((char) => {
+              const code = char.charCodeAt(0);
+              return code < 32 || code > 126;
+            })) return;
+
+            // Equivalente ao AcpBarcodeGate do Android: um resultado por abertura.
+            consumedRef.current = true;
+            setStatus(`Código ${value} identificado`);
+            try { await controlsRef.current?.stop(); } catch { /* scanner já parando */ }
+            stream.getTracks().forEach((cameraTrack) => cameraTrack.stop());
+            if (navigator.vibrate) navigator.vibrate(45);
+            onDetectedRef.current(value);
+          } finally {
+            processingRef.current = false;
+          }
+        });
+        if (disposedRef.current) {
+          await controls.stop();
+          return;
+        }
+        controlsRef.current = controls;
+      } catch (failure) {
+        if (disposedRef.current) return;
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        const message = failure instanceof Error ? failure.message : "Não foi possível abrir a câmera.";
+        setError(message.includes("Permission") || message.includes("denied") || message.includes("NotAllowed")
+          ? "A câmera foi bloqueada. Libere a permissão de câmera para este PWA e toque em Tentar novamente."
+          : "Não consegui manter a câmera ao vivo. Feche outro app que esteja usando a câmera e tente novamente.");
+        setStatus("Leitor parado");
+      }
+    }
+
+    void startLiveScanner();
+    return () => { void stopEverything(); };
+  }, [attempt]);
+
+  async function toggleTorch() {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const enabled = !torch;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: enabled } as any] } as any);
+      setTorch(enabled);
+    } catch {
+      setTorchAvailable(false);
+    }
+  }
+
+  return <div className="pc-modal-backdrop">
+    <section className="pc-camera-modal" role="dialog" aria-modal="true" aria-label="Leitor de código de barras">
+      <header>
+        <div><p>Leitor ao vivo</p><h2>Ler código de barras</h2></div>
+        <button onClick={onClose} aria-label="Fechar câmera"><X /></button>
+      </header>
+      <p className="pc-camera-help">Aponte para um único código de barras. A busca será automática.</p>
+      <div className="pc-camera-stage pc-camera-stage--live">
+        <video ref={videoRef} autoPlay playsInline muted />
+        <div className="pc-camera-target" aria-hidden="true"><span /></div>
+      </div>
+      <p className="pc-camera-status">{status}</p>
+      {torchAvailable && <button className="pc-camera-torch" onClick={() => void toggleTorch()}>{torch ? "Desligar lanterna" : "Ligar lanterna"}</button>}
+      {error && <div className="pc-camera-error"><span>{error}</span><button onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</button></div>}
+      <button className="pc-camera-close" onClick={onClose}>Fechar câmera</button>
+    </section>
+  </div>;
+}
+'''
+          p.write_text(s[:start] + scanner, encoding='utf-8')
+
+          css = Path('source/client/src/pages/ProductConsultation.css')
+          c = css.read_text(encoding='utf-8')
+          extra = '''\n.pc-camera-help{margin:10px 0 0!important;text-align:left!important;color:#555!important}.pc-camera-torch{width:100%;border:1px solid #d6d0b8;border-radius:12px;padding:10px 12px;background:#fff;color:#6e5700;font-weight:800}.pc-camera-error{display:grid;gap:8px;margin:8px 0;padding:10px 12px;border-radius:12px;background:#fdeaea;color:#8e2020}.pc-camera-error button{border:0;border-radius:10px;padding:9px 11px;background:#8e2020;color:#fff;font-weight:800}.pc-camera-stage--live video{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}\n'''
+          if '.pc-camera-help{' not in c:
+              css.write_text(c + extra, encoding='utf-8')
+          PY
+
+      - name: Remover workflow temporário
+        run: rm .github/workflows/ios-android-style-scanner-once.yml
+
+      - name: Validar TypeScript e build
+        working-directory: source
+        run: |
+          pnpm check
+          pnpm exec vite build
+
+      - name: Commit e push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/client/src/pages/ProductConsultation.tsx source/client/src/pages/ProductConsultation.css .github/workflows/ios-android-style-scanner-once.yml
+          git commit -m "Alinha scanner PWA ao fluxo do Android"
+          git push
