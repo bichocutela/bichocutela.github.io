@@ -28,174 +28,26 @@ jobs:
         working-directory: source
         run: pnpm install --frozen-lockfile
       - name: Aplicar code splitting conservador
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          # App: consulta e painel administrativo fora do bundle inicial.
-          app = Path('source/client/src/App.tsx')
-          app.write_text('''/** NRD Lojas PWA: experiência mobile alinhada ao aplicativo Android. */
-import { lazy, Suspense } from "react";
-import ManagementPanelEntry from "@/components/ManagementPanelEntry";
-import ProductConsultationEntry from "@/components/ProductConsultationEntry";
-import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
-
-const ProductConsultation = lazy(() => import("@/pages/ProductConsultation"));
-
-function Router() {
-  return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/consultar-produtos"} component={ProductConsultation} />
-      <Route path={"/404"} component={NotFound} />
-      <Route component={NotFound} />
-    </Switch>
-  );
-}
-
-function App() {
-  return (
-    <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
-        <TooltipProvider>
-          <Toaster />
-          <ProductConsultationEntry />
-          <ManagementPanelEntry />
-          <Suspense fallback={<div className="nrd-status">Carregando...</div>}>
-            <Router />
-          </Suspense>
-        </TooltipProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  );
-}
-
-export default App;
-''', encoding='utf-8')
-
-          entry = Path('source/client/src/components/ManagementPanelEntry.tsx')
-          entry.write_text('''import { lazy, Suspense, useEffect, useState } from "react";
-
-const ManagementPanel = lazy(() => import("./ManagementPanel"));
-
-/** Mantém apenas a entrada leve na Home e baixa o painel completo somente quando solicitado. */
-export default function ManagementPanelEntry() {
-  const [launch, setLaunch] = useState(0);
-
-  useEffect(() => {
-    const inject = () => {
-      const settingsButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".nrd-drawer-link"))
-        .find((button) => button.textContent?.includes("Configurações"));
-      if (!settingsButton || document.querySelector("[data-nrd-management-entry='true']")) return;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "nrd-drawer-link nrd-management-drawer-link";
-      button.dataset.nrdManagementEntry = "true";
-      button.textContent = "🛡️ Painel administrativo";
-      button.onclick = () => setLaunch((value) => value + 1);
-      settingsButton.parentElement?.insertBefore(button, settingsButton);
-    };
-    inject();
-    const observer = new MutationObserver(inject);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      document.querySelectorAll("[data-nrd-management-entry='true']").forEach((node) => node.remove());
-    };
-  }, []);
-
-  if (!launch) return null;
-  return (
-    <Suspense fallback={null}>
-      <ManagementPanel key={launch} initiallyOpen manageDrawerEntry={false} />
-    </Suspense>
-  );
-}
-''', encoding='utf-8')
-
-          panel = Path('source/client/src/components/ManagementPanel.tsx')
-          text = panel.read_text(encoding='utf-8')
-          text = text.replace('import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";\n', 'import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";\nimport "./ManagementPanel.css";\nimport "./ManagementPanelDesktop.css";\n', 1)
-          text = text.replace('export default function ManagementPanel() {\n  const [open, setOpen] = useState(false);', 'type ManagementPanelProps = { initiallyOpen?: boolean; manageDrawerEntry?: boolean };\n\nexport default function ManagementPanel({ initiallyOpen = false, manageDrawerEntry = true }: ManagementPanelProps = {}) {\n  const [open, setOpen] = useState(initiallyOpen);', 1)
-          text = text.replace('  useEffect(() => {\n    const inject = () => {\n      const settingsButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".nrd-drawer-link")).find((button) => button.textContent?.includes("Configurações"));', '  useEffect(() => {\n    if (!manageDrawerEntry) return;\n    const inject = () => {\n      const settingsButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".nrd-drawer-link")).find((button) => button.textContent?.includes("Configurações"));', 1)
-          text = text.replace('  }, []);\n\n  async function refresh(showMessage = false)', '  }, [manageDrawerEntry]);\n\n  async function refresh(showMessage = false)', 1)
-          panel.write_text(text, encoding='utf-8')
-
-          # Promoções: só baixar quando o usuário abrir a área.
-          home = Path('source/client/src/pages/Home.tsx')
-          text = home.read_text(encoding='utf-8')
-          text = text.replace('import { useEffect, useMemo, useState } from "react";', 'import { lazy, Suspense, useEffect, useMemo, useState } from "react";', 1)
-          text = text.replace('import PromotionsModal from "@/pages/PromotionsModal";\n', '', 1)
-          marker = 'const logoUrl = "/manus-storage/nrd-icon-original-user_0cf71537.png";'
-          text = text.replace(marker, 'const PromotionsModal = lazy(() => import("@/pages/PromotionsModal"));\n\n' + marker, 1)
-          text = text.replace('{promotionsOpen && <PromotionsModal onClose={() => setPromotionsOpen(false)} />}', '{promotionsOpen && <Suspense fallback={null}><PromotionsModal onClose={() => setPromotionsOpen(false)} /></Suspense>}', 1)
-          home.write_text(text, encoding='utf-8')
-
-          promo = Path('source/client/src/pages/PromotionsModal.tsx')
-          text = promo.read_text(encoding='utf-8')
-          if 'import "./PromotionsModal.css";' not in text:
-              text = text.replace('import { useEffect, useMemo, useState } from "react";\n', 'import { useEffect, useMemo, useState } from "react";\nimport "./PromotionsModal.css";\n', 1)
-          promo.write_text(text, encoding='utf-8')
-
-          main = Path('source/client/src/main.tsx')
-          text = main.read_text(encoding='utf-8')
-          text = text.replace('import "./pages/PromotionsModal.css";\n', '')
-          text = text.replace('import "./components/ManagementPanel.css";\n', '')
-          text = text.replace('import "./components/ManagementPanelDesktop.css";\n', '')
-          main.write_text(text, encoding='utf-8')
-
-          # Runtime/JSX locator são ferramentas de desenvolvimento; não entram no HTML de produção.
-          vite = Path('source/vite.config.ts')
-          text = vite.read_text(encoding='utf-8')
-          old = 'const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];\n\nexport default defineConfig({\n  plugins,'
-          new = '''export default defineConfig(({ mode }) => {\n  const developmentOnly = mode === "production"\n    ? []\n    : [jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];\n  const plugins = [react(), tailwindcss(), ...developmentOnly];\n\n  return {\n  plugins,'''
-          if old not in text:
-              raise SystemExit('bloco de plugins do Vite não encontrado')
-          text = text.replace(old, new, 1)
-          if not text.rstrip().endswith('});'):
-              raise SystemExit('final inesperado do vite.config.ts')
-          # defineConfig callback precisa fechar o objeto e a função.
-          text = text.rstrip()[:-3] + '  };\n});\n'
-          vite.write_text(text, encoding='utf-8')
-
-          # Fonte externa não deve bloquear a pintura do texto.
-          html = Path('source/client/index.html')
-          text = html.read_text(encoding='utf-8')
-          text = text.replace('family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap', 'family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap')
-          if '&display=swap' not in text and 'fonts.googleapis.com/css2?' in text:
-              text = text.replace('1,400&family=', '1,400&family=')
-              text = text.replace('&display=swap"', '&display=swap"')
-          # A URL atual termina em &display=swap em builds novos; se não, acrescenta.
-          text = text.replace('1,400&display=swap&display=swap', '1,400&display=swap')
-          if 'fonts.googleapis.com/css2?' in text and '&display=swap"' not in text:
-              text = text.replace('1,400" rel="stylesheet"', '1,400&display=swap" rel="stylesheet"')
-          html.write_text(text, encoding='utf-8')
-          PY
+        run: python3 .github/scripts/optimize_pwa_startup.py
       - name: Verificar TypeScript
         working-directory: source
         run: pnpm check
-      - name: Gerar build e relatorio
+      - name: Gerar build e validar producao
         working-directory: source
         run: |
           pnpm exec vite build
-          echo "Arquivos principais:" 
+          echo "Arquivos principais:"
           find dist/public/assets -maxdepth 1 -type f -printf '%f %s bytes\n' | sort -k2 -nr | head -20
           if grep -q 'manus-runtime' dist/public/index.html; then
             echo 'ERRO: manus-runtime ainda presente no HTML de produção'
             exit 1
           fi
-      - name: Remover workflow temporario
-        run: rm .github/workflows/optimize-pwa-startup-once.yml
+      - name: Remover temporarios
+        run: rm .github/workflows/optimize-pwa-startup-once.yml .github/scripts/optimize_pwa_startup.py
       - name: Commit e push somente apos validacao
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add source/client/src/App.tsx source/client/src/main.tsx source/client/src/pages/Home.tsx source/client/src/pages/PromotionsModal.tsx source/client/src/components/ManagementPanel.tsx source/client/src/components/ManagementPanelEntry.tsx source/client/index.html source/vite.config.ts .github/workflows/optimize-pwa-startup-once.yml
+          git add -A
           git commit -m "Otimiza carregamento inicial do PWA sem alterar funcionalidades"
           git push
