@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { nrdDb } from "@/lib/firebase";
+import { nrdDb } from "@/lib/firebaseDb";
 import {
   categoriesFromRemote,
   DEFAULT_CATEGORIES,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/nrd";
 
 const CATALOG_REFRESH_COOLDOWN_MS = 30_000;
+const CATALOG_BACKGROUND_REFRESH_DELAY_MS = 2_500;
 const CATALOG_CACHE_DB = "nrd-pwa-catalog-cache";
 const CATALOG_CACHE_STORE = "catalog";
 const CATALOG_CACHE_KEY = "products";
@@ -82,6 +83,7 @@ export function useNrdCatalog() {
     let disposed = false;
     let catalogRequestInFlight = false;
     let lastCatalogRefresh = 0;
+    let backgroundRefreshTimer: number | null = null;
 
     const loadCache = async () => {
       try {
@@ -89,10 +91,12 @@ export function useNrdCatalog() {
         if (!disposed && cachedProducts.length) {
           setProducts(cachedProducts);
           setCatalogReady(true);
+          return true;
         }
       } catch {
         // Cache é apenas uma otimização. Qualquer falha mantém o fluxo remoto original.
       }
+      return false;
     };
 
     const refreshCatalog = async (force = false) => {
@@ -129,9 +133,21 @@ export function useNrdCatalog() {
       }
     };
 
-    // O cache nunca bloqueia a atualização remota: ambos começam imediatamente.
-    void loadCache();
-    void refreshCatalog(true);
+    // Em reaberturas, mostra o catálogo local primeiro e só depois atualiza a coleção inteira.
+    // Sem cache, mantém o comportamento original e busca imediatamente.
+    const startCatalog = async () => {
+      const hasCachedCatalog = await loadCache();
+      if (disposed) return;
+      if (hasCachedCatalog) {
+        backgroundRefreshTimer = window.setTimeout(() => {
+          backgroundRefreshTimer = null;
+          void refreshCatalog(true);
+        }, CATALOG_BACKGROUND_REFRESH_DELAY_MS);
+      } else {
+        void refreshCatalog(true);
+      }
+    };
+    void startCatalog();
 
     const refreshWhenActive = () => {
       if (document.visibilityState === "visible") void refreshCatalog();
@@ -158,6 +174,7 @@ export function useNrdCatalog() {
 
     return () => {
       disposed = true;
+      if (backgroundRefreshTimer !== null) window.clearTimeout(backgroundRefreshTimer);
       stopSettings();
       window.removeEventListener("focus", refreshWhenActive);
       document.removeEventListener("visibilitychange", refreshWhenActive);
