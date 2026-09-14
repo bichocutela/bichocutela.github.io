@@ -1,0 +1,140 @@
+from pathlib import Path
+
+p = Path('source/client/src/pages/ProductConsultation.tsx')
+s = p.read_text(encoding='utf-8')
+
+state_anchor = '  const [addOpen, setAddOpen] = useState(false);\n'
+if 'const [barcodeOpen, setBarcodeOpen]' not in s:
+    s = s.replace(state_anchor, state_anchor + '  const [barcodeOpen, setBarcodeOpen] = useState(false);\n')
+
+detail_call = '''      onRefresh={() => void refreshDetail()}
+      onAdd={() => setAddOpen(true)}
+      onClose={() => setSelected(null)}
+    />}
+'''
+replacement = '''      onRefresh={() => void refreshDetail()}
+      onBarcode={() => setBarcodeOpen(true)}
+      onAdd={() => setAddOpen(true)}
+      onClose={() => setSelected(null)}
+    />}
+    {barcodeOpen && selected && <ProductBarcodeDialog product={selected} onClose={() => setBarcodeOpen(false)} />}
+'''
+if detail_call not in s:
+    raise SystemExit('chamada ProductDetail nao encontrada')
+s = s.replace(detail_call, replacement)
+
+sig_old = '''function ProductDetail({ product, offers, queriedAt, busy, canAdd, onRefresh, onAdd, onClose }: {
+  product: ConsultationProduct;
+  offers: CommercialOffer[];
+  queriedAt: string | null;
+  busy: boolean;
+  canAdd: boolean;
+  onRefresh: () => void;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+'''
+sig_new = '''function ProductDetail({ product, offers, queriedAt, busy, canAdd, onRefresh, onBarcode, onAdd, onClose }: {
+  product: ConsultationProduct;
+  offers: CommercialOffer[];
+  queriedAt: string | null;
+  busy: boolean;
+  canAdd: boolean;
+  onRefresh: () => void;
+  onBarcode: () => void;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+'''
+if sig_old not in s:
+    raise SystemExit('assinatura ProductDetail nao encontrada')
+s = s.replace(sig_old, sig_new)
+
+actions_old = '''    <div className="pc-detail-actions">
+      <button onClick={onRefresh} disabled={busy}><RefreshCw className={busy ? "is-spinning" : ""} size={17} /> Atualizar preços</button>
+      {canAdd && <button onClick={onAdd}><PackagePlus size={17} /> Adicionar ao NRD</button>}
+    </div>
+'''
+actions_new = '''    <div className="pc-detail-actions pc-detail-actions--barcode">
+      <button onClick={onRefresh} disabled={busy}><RefreshCw className={busy ? "is-spinning" : ""} size={17} /> Atualizar preços</button>
+      <button className="pc-barcode-action" onClick={onBarcode} disabled={!product.barcode && !product.code}><span aria-hidden="true">▥</span> Ver Cód Barra</button>
+      {canAdd && <button className="pc-add-action" onClick={onAdd}><PackagePlus size={17} /> Adicionar ao NRD</button>}
+    </div>
+'''
+if actions_old not in s:
+    raise SystemExit('acoes do detalhe nao encontradas')
+s = s.replace(actions_old, actions_new)
+
+insert_before = '\nfunction ConfigureDialog('
+component = r'''
+function ProductBarcodeDialog({ product, onClose }: { product: ConsultationProduct; onClose: () => void }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const barcodeValue = (product.barcode || product.code).trim();
+  const [scannerProfile, setScannerProfile] = useState("Padrão");
+  const [zoomPercent, setZoomPercent] = useState(100);
+
+  useEffect(() => {
+    let alive = true;
+    async function renderBarcode() {
+      if (!barcodeValue || !svgRef.current) return;
+      try {
+        const module = await import("jsbarcode");
+        if (!alive || !svgRef.current) return;
+        const JsBarcode = module.default;
+        const width = scannerProfile === "Symbol" ? 2.2 : scannerProfile === "Datalogic" ? 2.4 : 2;
+        const height = scannerProfile === "Symbol" ? 118 : scannerProfile === "Datalogic" ? 128 : 100;
+        JsBarcode(svgRef.current, barcodeValue, {
+          format: "CODE128",
+          displayValue: false,
+          margin: 8,
+          width,
+          height,
+          background: "#ffffff",
+          lineColor: "#000000",
+        });
+      } catch {}
+    }
+    void renderBarcode();
+    return () => { alive = false; };
+  }, [barcodeValue, scannerProfile]);
+
+  const category = product.categories[0] || "Varejo";
+
+  return <div className="pc-modal-backdrop" onMouseDown={onClose}>
+    <section className="pc-barcode-dialog" role="dialog" aria-modal="true" aria-label="Código de barras" onMouseDown={(event) => event.stopPropagation()}>
+      <button className="pc-barcode-dialog-close" onClick={onClose} aria-label="Fechar"><X /></button>
+      <h2>{product.description}</h2>
+      <strong className="pc-barcode-number">{barcodeValue || "não informado"}</strong>
+      <strong className="pc-barcode-category">{category}</strong>
+      <div className="pc-barcode-graphic" style={{ width: `${Math.min(100, 90 * (zoomPercent / 100))}%` }}>
+        <svg ref={svgRef} aria-label={`Código de barras ${barcodeValue}`} />
+      </div>
+      <p>Código de barras / Referência</p>
+      <div className="pc-barcode-divider" />
+      <div className="pc-barcode-profile-title"><span aria-hidden="true">▥</span><strong>Perfil do Leitor</strong></div>
+      <div className="pc-barcode-profiles">
+        {["Padrão", "Symbol", "Datalogic"].map((profile) => <button key={profile} className={scannerProfile === profile ? "is-active" : ""} onClick={() => setScannerProfile(profile)}>{profile}</button>)}
+      </div>
+      <strong className="pc-barcode-adjust-title">Ajuste de leitura</strong>
+      <div className="pc-barcode-adjust">
+        <button onClick={() => setZoomPercent((value) => Math.max(80, value - 10))} disabled={zoomPercent <= 80}>−</button>
+        <strong>{zoomPercent}%</strong>
+        <button onClick={() => setZoomPercent((value) => Math.min(120, value + 10))} disabled={zoomPercent >= 120}>+</button>
+      </div>
+      <button className="pc-barcode-close-button" onClick={onClose}>FECHAR</button>
+    </section>
+  </div>;
+}
+'''
+if 'function ProductBarcodeDialog(' not in s:
+    s = s.replace(insert_before, component + insert_before)
+
+p.write_text(s, encoding='utf-8')
+
+css = Path('source/client/src/pages/ProductConsultation.css')
+c = css.read_text(encoding='utf-8')
+extra = r'''
+.pc-detail-actions--barcode{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pc-detail-actions--barcode .pc-add-action{grid-column:1/-1;background:#2d8b49}.pc-detail-actions--barcode .pc-barcode-action{background:#fff;color:#8c6d08;border:1px solid #d8c36a}.pc-barcode-dialog{position:relative;width:min(90vw,620px);max-height:92vh;overflow:auto;border-radius:32px;background:#fff;padding:28px 24px;box-shadow:0 28px 90px rgba(0,0,0,.32);text-align:center}.pc-barcode-dialog-close{position:absolute;right:14px;top:14px;width:38px;height:38px;border:0;border-radius:50%;background:#f3f3f3;display:grid;place-items:center}.pc-barcode-dialog h2{margin:4px 44px 14px;font-size:1.55rem;line-height:1.15}.pc-barcode-number{display:block;font-size:2.55rem;line-height:1;color:#b49116;margin:8px 0 10px;word-break:break-all}.pc-barcode-category{display:block;text-transform:uppercase;color:#8c6d08;margin-bottom:16px}.pc-barcode-graphic{margin:0 auto 12px;background:#fff;overflow:hidden}.pc-barcode-graphic svg{display:block;width:100%;height:auto;max-height:140px}.pc-barcode-dialog>p{margin:0;color:#666}.pc-barcode-divider{height:1px;background:#ddd;margin:22px 0 16px}.pc-barcode-profile-title{display:flex;align-items:center;gap:8px;color:#8c6d08;text-align:left;margin-bottom:10px}.pc-barcode-profiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.pc-barcode-profiles button{min-height:40px;border:1px solid #c9c9c9;border-radius:12px;background:#fff;font-weight:700}.pc-barcode-profiles button.is-active{background:#b49116;border-color:#b49116;color:#fff}.pc-barcode-adjust-title{display:block;margin-top:18px}.pc-barcode-adjust{display:flex;justify-content:center;align-items:center;gap:18px;margin:8px 0 18px}.pc-barcode-adjust button{width:38px;height:38px;border:0;border-radius:50%;background:#f0f0f0;font-size:1.4rem}.pc-barcode-adjust button:disabled{opacity:.4}.pc-barcode-close-button{width:100%;height:54px;border:0;border-radius:24px;background:#b49116;color:#fff;font-weight:900;font-size:1rem}@media(max-width:680px){.pc-detail-actions--barcode{grid-template-columns:1fr 1fr}.pc-barcode-dialog{padding:24px 16px;border-radius:26px}.pc-barcode-number{font-size:2rem}.pc-barcode-dialog h2{font-size:1.28rem}}
+'''
+if '.pc-barcode-dialog{' not in c:
+    css.write_text(c + extra, encoding='utf-8')
