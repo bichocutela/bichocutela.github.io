@@ -107,8 +107,6 @@ export default function ProductConsultation() {
   const [addOpen, setAddOpen] = useState(false);
   const requestSequence = useRef(0);
   const skipNextDebouncedSearch = useRef<string | null>(null);
-  const nativeCaptureInputRef = useRef<HTMLInputElement>(null);
-  const [nativeCaptureBusy, setNativeCaptureBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -220,120 +218,6 @@ export default function ProductConsultation() {
     void runSearch(0, true, clean, "");
   }
 
-  function isIosDevice() {
-    return /iPad|iPhone|iPod/i.test(navigator.userAgent)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  }
-
-  async function createBarcodeImageVariants(file: File) {
-    const url = URL.createObjectURL(file);
-    try {
-      const image = new Image();
-      await new Promise<void>((resolve, reject) => {
-        image.onload = () => resolve();
-        image.onerror = () => reject(new Error("imagem"));
-        image.src = url;
-      });
-
-      const sourceWidth = image.naturalWidth || image.width;
-      const sourceHeight = image.naturalHeight || image.height;
-      if (!sourceWidth || !sourceHeight) return [] as File[];
-
-      const specs = [
-        { crop: 0.82, centerY: 0.50, grayscale: false, contrast: 1.18 },
-        { crop: 0.70, centerY: 0.50, grayscale: true, contrast: 1.72 },
-        { crop: 0.48, centerY: 0.50, grayscale: true, contrast: 1.95 },
-        { crop: 0.62, centerY: 0.36, grayscale: true, contrast: 1.78 },
-        { crop: 0.62, centerY: 0.64, grayscale: true, contrast: 1.78 },
-        { crop: 1.00, centerY: 0.50, grayscale: true, contrast: 1.55 },
-      ];
-      const files: File[] = [];
-
-      for (let index = 0; index < specs.length; index += 1) {
-        const spec = specs[index];
-        const cropHeight = Math.max(1, Math.round(sourceHeight * spec.crop));
-        const center = Math.round(sourceHeight * spec.centerY);
-        const sy = Math.max(0, Math.min(sourceHeight - cropHeight, center - Math.round(cropHeight / 2)));
-        const targetWidth = Math.round(Math.min(2200, Math.max(1200, sourceWidth)));
-        const targetHeight = Math.max(1, Math.round(cropHeight * (targetWidth / sourceWidth)));
-        const canvas = document.createElement("canvas");
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-        const context = canvas.getContext("2d", { willReadFrequently: spec.grayscale });
-        if (!context) continue;
-        context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = "high";
-        context.drawImage(image, 0, sy, sourceWidth, cropHeight, 0, 0, targetWidth, targetHeight);
-
-        if (spec.grayscale || spec.contrast !== 1) {
-          const pixels = context.getImageData(0, 0, targetWidth, targetHeight);
-          const data = pixels.data;
-          for (let i = 0; i < data.length; i += 4) {
-            const gray = Math.round(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
-            const base = spec.grayscale ? gray : Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
-            const enhanced = Math.max(0, Math.min(255, Math.round((base - 128) * spec.contrast + 128)));
-            if (spec.grayscale) {
-              data[i] = enhanced;
-              data[i + 1] = enhanced;
-              data[i + 2] = enhanced;
-            } else {
-              const ratio = base ? enhanced / base : 1;
-              data[i] = Math.max(0, Math.min(255, Math.round(data[i] * ratio)));
-              data[i + 1] = Math.max(0, Math.min(255, Math.round(data[i + 1] * ratio)));
-              data[i + 2] = Math.max(0, Math.min(255, Math.round(data[i + 2] * ratio)));
-            }
-          }
-          context.putImageData(pixels, 0, 0);
-        }
-
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.96));
-        if (blob) files.push(new File([blob], `barcode-${index}.jpg`, { type: "image/jpeg" }));
-      }
-      return files;
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-
-  async function scanNativeIosCapture(file: File) {
-    setNativeCaptureBusy(true);
-    toast.message("Analisando código de barras...");
-    const host = document.createElement("div");
-    host.id = `nrd-ios-file-scanner-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    host.style.position = "fixed";
-    host.style.left = "-10000px";
-    host.style.top = "-10000px";
-    host.style.width = "480px";
-    host.style.height = "480px";
-    host.style.opacity = "0";
-    host.style.pointerEvents = "none";
-    document.body.appendChild(host);
-
-    try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode(host.id, { verbose: false });
-      const candidates = [file, ...(await createBarcodeImageVariants(file))];
-      let code = "";
-      for (const candidate of candidates) {
-        try {
-          code = (await scanner.scanFile(candidate, false)).trim();
-          if (code) break;
-        } catch {
-          // Tenta a próxima variação: recorte, escala e contraste diferentes.
-        }
-      }
-      try { await scanner.clear(); } catch { /* limpeza opcional */ }
-      if (!code) throw new Error("Código vazio");
-      onScanned(code);
-    } catch {
-      toast.error("Não consegui identificar o código. Aproxime um pouco mais e mantenha as barras inteiras na foto.");
-    } finally {
-      host.remove();
-      setNativeCaptureBusy(false);
-      if (nativeCaptureInputRef.current) nativeCaptureInputRef.current.value = "";
-    }
-  }
-
   function openCameraScanner() {
     setCameraOpen(true);
   }
@@ -359,21 +243,7 @@ export default function ProductConsultation() {
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, código ou cód. de barras" autoComplete="off" inputMode="search" />
           {query && <button onClick={() => setQuery("")} aria-label="Limpar"><X size={18} /></button>}
         </label>
-        {isIosDevice() ? <label className={`pc-camera-button pc-native-camera-button${nativeCaptureBusy ? " is-disabled" : ""}`} aria-label="Ler código pela câmera">
-          <Camera />
-          <input
-            ref={nativeCaptureInputRef}
-            className="pc-native-camera-input"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            disabled={nativeCaptureBusy}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              if (file) void scanNativeIosCapture(file);
-            }}
-          />
-        </label> : <button className="pc-camera-button" onClick={openCameraScanner} aria-label="Ler código pela câmera"><Camera /></button>}
+        <button className="pc-camera-button" onClick={openCameraScanner} aria-label="Ler código pela câmera"><Camera /></button>
       </div>
       <div className="pc-search-actions">
         <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} aria-label="Filtrar categoria">
@@ -516,7 +386,181 @@ function AddToNrdDialog({ product, onClose }: { product: ConsultationProduct; on
   </section></div>;
 }
 
+
 function CameraScanner({ onDetected, onClose }: { onDetected: (code: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fallbackInputRef = useRef<HTMLInputElement>(null);
+  const controlsRef = useRef<{ stop: () => void | Promise<void> } | null>(null);
+  const detectedRef = useRef(false);
+  const onDetectedRef = useRef(onDetected);
+  const [status, setStatus] = useState("Preparando câmera...");
+  const [fallbackVisible, setFallbackVisible] = useState(false);
+  const [fallbackBusy, setFallbackBusy] = useState(false);
+
+  useEffect(() => { onDetectedRef.current = onDetected; }, [onDetected]);
+
+  useEffect(() => {
+    let disposed = false;
+    let watchdog = 0;
+    let startTime = 0;
+
+    const stopEverything = async () => {
+      try { await controlsRef.current?.stop(); } catch { /* já parada */ }
+      controlsRef.current = null;
+      const stream = videoRef.current?.srcObject as MediaStream | null;
+      stream?.getTracks().forEach((track) => track.stop());
+      if (videoRef.current) videoRef.current.srcObject = null;
+    };
+
+    const boot = async () => {
+      try {
+        const [{ BrowserMultiFormatReader }, zxing] = await Promise.all([
+          import("@zxing/browser"),
+          import("@zxing/library"),
+        ]);
+        if (disposed || !videoRef.current) return;
+
+        const hints = new Map<any, any>();
+        hints.set(zxing.DecodeHintType.POSSIBLE_FORMATS, [
+          zxing.BarcodeFormat.EAN_13,
+          zxing.BarcodeFormat.EAN_8,
+          zxing.BarcodeFormat.UPC_A,
+          zxing.BarcodeFormat.UPC_E,
+          zxing.BarcodeFormat.CODE_128,
+          zxing.BarcodeFormat.CODE_39,
+          zxing.BarcodeFormat.ITF,
+        ]);
+        hints.set(zxing.DecodeHintType.TRY_HARDER, true);
+
+        const reader = new BrowserMultiFormatReader(hints, {
+          delayBetweenScanAttempts: 20,
+          delayBetweenScanSuccess: 400,
+        });
+
+        setStatus("Aponte para o código de barras");
+        startTime = performance.now();
+        const controls = await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30, max: 30 },
+            },
+          },
+          videoRef.current,
+          async (result) => {
+            if (!result || detectedRef.current || disposed) return;
+            const value = result.getText().trim();
+            if (!value) return;
+            detectedRef.current = true;
+            try { await controlsRef.current?.stop(); } catch { /* leitura já concluída */ }
+            onDetectedRef.current(value);
+          },
+        );
+        if (disposed) {
+          await controls.stop();
+          return;
+        }
+        controlsRef.current = controls;
+
+        const stream = videoRef.current.srcObject as MediaStream | null;
+        const track = stream?.getVideoTracks()[0];
+        if (track) {
+          try {
+            const caps = (track.getCapabilities?.() ?? {}) as any;
+            const advanced: any[] = [];
+            if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) advanced.push({ focusMode: "continuous" });
+            if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) advanced.push({ exposureMode: "continuous" });
+            if (advanced.length) await track.applyConstraints({ advanced } as any);
+          } catch { /* iOS pode não expor controles avançados */ }
+        }
+
+        let lastTime = videoRef.current.currentTime;
+        watchdog = window.setInterval(() => {
+          if (disposed || detectedRef.current || !videoRef.current) return;
+          const now = videoRef.current.currentTime;
+          if (performance.now() - startTime > 2800 && Math.abs(now - lastTime) < 0.01) {
+            setStatus("A câmera travou no iOS. Use a foto abaixo ou reabra o leitor.");
+            setFallbackVisible(true);
+          }
+          lastTime = now;
+        }, 900);
+      } catch {
+        if (disposed) return;
+        setStatus("Não consegui manter a câmera ao vivo neste iPhone.");
+        setFallbackVisible(true);
+      }
+    };
+
+    void boot();
+    return () => {
+      disposed = true;
+      if (watchdog) window.clearInterval(watchdog);
+      void stopEverything();
+    };
+  }, []);
+
+  async function scanFallbackPhoto(file: File) {
+    setFallbackBusy(true);
+    setStatus("Lendo foto...");
+    const host = document.createElement("div");
+    host.id = `nrd-fallback-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    host.style.position = "fixed";
+    host.style.left = "-10000px";
+    host.style.top = "-10000px";
+    host.style.width = "480px";
+    host.style.height = "480px";
+    document.body.appendChild(host);
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode(host.id, { verbose: false });
+      const code = (await scanner.scanFile(file, true)).trim();
+      try { await scanner.clear(); } catch { /* opcional */ }
+      if (!code) throw new Error("sem código");
+      detectedRef.current = true;
+      onDetectedRef.current(code);
+    } catch {
+      setStatus("Não identifiquei o código. Enquadre as barras inteiras e tente outra vez.");
+    } finally {
+      host.remove();
+      setFallbackBusy(false);
+      if (fallbackInputRef.current) fallbackInputRef.current.value = "";
+    }
+  }
+
+  return <div className="pc-modal-backdrop">
+    <section className="pc-camera-modal">
+      <header>
+        <div><p>Leitor contínuo</p><h2>Código de barras</h2></div>
+        <button onClick={onClose} aria-label="Fechar"><X /></button>
+      </header>
+      <div className="pc-camera-stage pc-camera-stage--live">
+        <video ref={videoRef} autoPlay playsInline muted />
+        <div className="pc-camera-target" aria-hidden="true"><span /></div>
+      </div>
+      <p className="pc-camera-status">{status}</p>
+      {fallbackVisible && <label className={`pc-camera-fallback${fallbackBusy ? " is-disabled" : ""}`}>
+        <Camera size={18} /> {fallbackBusy ? "Analisando..." : "Usar câmera para tirar uma foto"}
+        <input
+          ref={fallbackInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          disabled={fallbackBusy}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) void scanFallbackPhoto(file);
+          }}
+        />
+      </label>}
+      <button className="pc-camera-close" onClick={onClose}>Fechar</button>
+    </section>
+  </div>;
+}
+
+function LegacyCameraScanner({ onDetected, onClose }: { onDetected: (code: string) => void; onClose: () => void }) {
   const elementId = useMemo(() => `nrd-scanner-${Math.random().toString(36).slice(2)}`, []);
   const scannerRef = useRef<Html5QrcodeLike | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
