@@ -12,7 +12,7 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const CACHE_NAME = "nrd-codigos-shell-v10";
+const CACHE_NAME = "nrd-codigos-shell-v11";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
