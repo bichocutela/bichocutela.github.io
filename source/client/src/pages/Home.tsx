@@ -1,5 +1,5 @@
 /** Catálogo em Movimento: wayfinding de varejo, foco na consulta e contraste garantido. */
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Apple,
   Bell,
@@ -17,7 +17,6 @@ import {
   Tags,
   X,
 } from "lucide-react";
-import PromotionsModal from "@/pages/PromotionsModal";
 import { toast } from "sonner";
 import { useNrdCatalog } from "@/hooks/useNrdData";
 import {
@@ -32,6 +31,8 @@ import {
   type Product,
   type ThemeKey,
 } from "@/lib/nrd";
+
+const PromotionsModal = lazy(() => import("@/pages/PromotionsModal"));
 
 const logoUrl = "/manus-storage/nrd-icon-original-user_0cf71537.png";
 const scanIllustrationUrl = "/manus-storage/nrd-pwa-barcode-backdrop_5b26df06.png";
@@ -375,7 +376,7 @@ export default function Home() {
       {installOpen && <InstallModal onInstall={installPwa} onClose={() => setInstallOpen(false)} />}
       {qrPlatform && <QrInstallModal platform={qrPlatform} onInstallPwa={installPwa} onClose={() => setQrPlatform(null)} />}
       {notificationsOpen && <NotificationsModal notifications={notifications} onOpen={openNotification} onReadAll={readAllNotifications} onClose={() => setNotificationsOpen(false)} />}
-      {promotionsOpen && <PromotionsModal onClose={() => setPromotionsOpen(false)} />}
+      {promotionsOpen && <Suspense fallback={null}><PromotionsModal onClose={() => setPromotionsOpen(false)} /></Suspense>}
     </main>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "./PromotionsModal.css";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Heart, LockKeyhole, LogOut, RefreshCw, Search, Star, Store, Tag, X } from "lucide-react";
 import {
   fetchPromotions,

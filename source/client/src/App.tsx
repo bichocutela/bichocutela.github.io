@@ -1,14 +1,16 @@
 /** NRD Lojas PWA: experiência mobile alinhada ao aplicativo Android. */
-import ManagementPanel from "@/components/ManagementPanel";
+import { lazy, Suspense } from "react";
+import ManagementPanelEntry from "@/components/ManagementPanelEntry";
 import ProductConsultationEntry from "@/components/ProductConsultationEntry";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import ProductConsultation from "@/pages/ProductConsultation";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+
+const ProductConsultation = lazy(() => import("@/pages/ProductConsultation"));
 
 function Router() {
   return (
@@ -28,8 +30,10 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <ProductConsultationEntry />
-          <ManagementPanel />
-          <Router />
+          <ManagementPanelEntry />
+          <Suspense fallback={<div className="nrd-status">Carregando...</div>}>
+            <Router />
+          </Suspense>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

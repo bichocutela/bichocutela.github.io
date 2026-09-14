@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import "./ManagementPanel.css";
+import "./ManagementPanelDesktop.css";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import {
   ArrowDown,
@@ -67,8 +69,10 @@ type Section = "dashboard" | "products" | "suggestions" | "categories" | "tabs" 
 const EMPTY_DATA: ManagementData = { settings: {}, products: [], categories: [], tabs: [], suggestions: [], snapshots: [] };
 const PAGE_SIZE = 50;
 
-export default function ManagementPanel() {
-  const [open, setOpen] = useState(false);
+type ManagementPanelProps = { initiallyOpen?: boolean; manageDrawerEntry?: boolean };
+
+export default function ManagementPanel({ initiallyOpen = false, manageDrawerEntry = true }: ManagementPanelProps = {}) {
+  const [open, setOpen] = useState(initiallyOpen);
   const [role, setRole] = useState<ManagementRole | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [section, setSection] = useState<Section>("products");
@@ -89,6 +93,7 @@ export default function ManagementPanel() {
   }, []);
 
   useEffect(() => {
+    if (!manageDrawerEntry) return;
     const inject = () => {
       const settingsButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".nrd-drawer-link")).find((button) => button.textContent?.includes("Configurações"));
       if (!settingsButton || document.querySelector("[data-nrd-management-entry='true']")) return;
@@ -104,7 +109,7 @@ export default function ManagementPanel() {
     const observer = new MutationObserver(inject);
     observer.observe(document.body, { childList: true, subtree: true });
     return () => { observer.disconnect(); document.querySelectorAll("[data-nrd-management-entry='true']").forEach((node) => node.remove()); };
-  }, []);
+  }, [manageDrawerEntry]);
 
   async function refresh(showMessage = false) {
     if (!role) return;

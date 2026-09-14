@@ -3,12 +3,9 @@ import App from "./App";
 import AboutFooter from "./components/AboutFooter";
 import "./index.css";
 import "./desktop.css";
-import "./pages/PromotionsModal.css";
 import "./lib/barcodeEnhancer.css";
 import "./lib/barcodeEnhancer";
 import "./components/AboutFooter.css";
-import "./components/ManagementPanel.css";
-import "./components/ManagementPanelDesktop.css";
 
 // O build desta entrada publica também as preferências locais de tema e os fundos por tema.
 if ("serviceWorker" in navigator) {
