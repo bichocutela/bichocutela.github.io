@@ -1,8 +1,9 @@
-name: Ajustar Ver Cod Barra no PWA uma vez
+name: Fix barcode button PWA
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - .github/workflows/fix-barcode-button-layout-once.yml
 
@@ -24,29 +25,23 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: source/pnpm-lock.yaml
-      - name: Instalar dependencias
+      - name: Install
         working-directory: source
         run: pnpm install --frozen-lockfile
-      - name: Fixar botoes lado a lado
-        shell: bash
-        run: |
-          cat >> source/client/src/pages/ProductConsultation.css <<'EOF'
-
-/* Consulta de preços: Atualizar preços + Ver Cód Barra sempre visíveis lado a lado. */
-.pc-detail-actions{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:8px!important;align-items:stretch}.pc-detail-actions>button{width:100%;min-width:0;justify-content:center}.pc-detail-actions>button:nth-child(1){grid-column:1}.pc-detail-actions>.pc-barcode-action{grid-column:2!important;background:#fff!important;color:#8c6d08!important;border:2px solid #b49116!important}.pc-detail-actions>button:nth-child(3){grid-column:1/-1;background:#2d8b49!important}
-@media(max-width:680px){.pc-detail-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}.pc-detail-actions>button{padding:10px 7px!important;font-size:.84rem!important;line-height:1.05}.pc-detail-actions>.pc-barcode-action{display:flex!important;visibility:visible!important;opacity:1!important}}
-EOF
-      - name: Validar TypeScript e build
+      - name: Patch
+        run: python3 .github/scripts/fix_barcode_button_css.py
+      - name: Check
         working-directory: source
-        run: |
-          pnpm check
-          pnpm exec vite build
-      - name: Remover workflow temporario
-        run: rm .github/workflows/fix-barcode-button-layout-once.yml
-      - name: Commit e push
+        run: pnpm check
+      - name: Build
+        working-directory: source
+        run: pnpm exec vite build
+      - name: Cleanup
+        run: rm .github/workflows/fix-barcode-button-layout-once.yml .github/scripts/fix_barcode_button_css.py
+      - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add source/client/src/pages/ProductConsultation.css .github/workflows/fix-barcode-button-layout-once.yml
-          git commit -m "Mantem Ver Cod Barra visivel ao lado de Atualizar precos"
+          git add source/client/src/pages/ProductConsultation.css .github/workflows/fix-barcode-button-layout-once.yml .github/scripts/fix_barcode_button_css.py
+          git commit -m "Fix barcode action visibility on PWA"
           git push
