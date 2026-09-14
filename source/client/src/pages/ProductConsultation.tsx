@@ -389,36 +389,84 @@ function AddToNrdDialog({ product, onClose }: { product: ConsultationProduct; on
 
 function CameraScanner({ onDetected, onClose }: { onDetected: (code: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const fallbackInputRef = useRef<HTMLInputElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const controlsRef = useRef<{ stop: () => void | Promise<void> } | null>(null);
-  const detectedRef = useRef(false);
+  const disposedRef = useRef(false);
+  const processingRef = useRef(false);
+  const consumedRef = useRef(false);
+  const [status, setStatus] = useState("Abrindo câmera traseira...");
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [torch, setTorch] = useState(false);
+  const [torchAvailable, setTorchAvailable] = useState(false);
   const onDetectedRef = useRef(onDetected);
-  const [status, setStatus] = useState("Preparando câmera...");
-  const [fallbackVisible, setFallbackVisible] = useState(false);
-  const [fallbackBusy, setFallbackBusy] = useState(false);
 
   useEffect(() => { onDetectedRef.current = onDetected; }, [onDetected]);
 
   useEffect(() => {
-    let disposed = false;
-    let watchdog = 0;
-    let startTime = 0;
+    disposedRef.current = false;
+    processingRef.current = false;
+    consumedRef.current = false;
+    setError("");
+    setStatus("Abrindo câmera traseira...");
+    setTorch(false);
+    setTorchAvailable(false);
 
-    const stopEverything = async () => {
-      try { await controlsRef.current?.stop(); } catch { /* já parada */ }
+    async function stopEverything() {
+      disposedRef.current = true;
+      try { await controlsRef.current?.stop(); } catch { /* já encerrado */ }
       controlsRef.current = null;
-      const stream = videoRef.current?.srcObject as MediaStream | null;
-      stream?.getTracks().forEach((track) => track.stop());
-      if (videoRef.current) videoRef.current.srcObject = null;
-    };
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      const video = videoRef.current;
+      if (video) {
+        try { video.pause(); } catch { /* noop */ }
+        video.srcObject = null;
+      }
+    }
 
-    const boot = async () => {
+    async function startLiveScanner() {
       try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("Este navegador não oferece câmera ao vivo.");
+        const video = videoRef.current;
+        if (!video) return;
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 360 },
+            frameRate: { ideal: 30, min: 15, max: 30 },
+          },
+        });
+        if (disposedRef.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        video.srcObject = stream;
+        video.setAttribute("playsinline", "true");
+        video.muted = true;
+        await video.play();
+
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          try {
+            const caps = (track.getCapabilities?.() ?? {}) as any;
+            const advanced: any[] = [];
+            if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) advanced.push({ focusMode: "continuous" });
+            if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) advanced.push({ exposureMode: "continuous" });
+            if (advanced.length) await track.applyConstraints({ advanced } as any);
+            setTorchAvailable(Boolean(caps.torch));
+          } catch { /* Safari pode ocultar capacidades */ }
+        }
+
         const [{ BrowserMultiFormatReader }, zxing] = await Promise.all([
           import("@zxing/browser"),
           import("@zxing/library"),
         ]);
-        if (disposed || !videoRef.current) return;
+        if (disposedRef.current) return;
 
         const hints = new Map<any, any>();
         hints.set(zxing.DecodeHintType.POSSIBLE_FORMATS, [
@@ -429,207 +477,85 @@ function CameraScanner({ onDetected, onClose }: { onDetected: (code: string) => 
           zxing.BarcodeFormat.CODE_128,
           zxing.BarcodeFormat.CODE_39,
           zxing.BarcodeFormat.ITF,
+          zxing.BarcodeFormat.CODABAR,
         ]);
         hints.set(zxing.DecodeHintType.TRY_HARDER, true);
 
         const reader = new BrowserMultiFormatReader(hints, {
-          delayBetweenScanAttempts: 20,
-          delayBetweenScanSuccess: 400,
+          delayBetweenScanAttempts: 16,
+          delayBetweenScanSuccess: 250,
         });
 
-        setStatus("Aponte para o código de barras");
-        startTime = performance.now();
-        const controls = await reader.decodeFromConstraints(
-          {
-            audio: false,
-            video: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 30, max: 30 },
-            },
-          },
-          videoRef.current,
-          async (result) => {
-            if (!result || detectedRef.current || disposed) return;
+        setStatus("Aponte para um único código. A leitura é automática.");
+        const controls = await reader.decodeFromStream(stream, video, async (result) => {
+          if (!result || disposedRef.current || consumedRef.current || processingRef.current) return;
+          processingRef.current = true;
+          try {
             const value = result.getText().trim();
-            if (!value) return;
-            detectedRef.current = true;
-            try { await controlsRef.current?.stop(); } catch { /* leitura já concluída */ }
+            if (!value || value.length > 128) return;
+            if (value.split("").some((char) => {
+              const code = char.charCodeAt(0);
+              return code < 32 || code > 126;
+            })) return;
+
+            consumedRef.current = true;
+            setStatus(`Código ${value} identificado`);
+            try { await controlsRef.current?.stop(); } catch { /* scanner já parando */ }
+            stream.getTracks().forEach((cameraTrack) => cameraTrack.stop());
+            if (navigator.vibrate) navigator.vibrate(45);
             onDetectedRef.current(value);
-          },
-        );
-        if (disposed) {
+          } finally {
+            processingRef.current = false;
+          }
+        });
+        if (disposedRef.current) {
           await controls.stop();
           return;
         }
         controlsRef.current = controls;
-
-        const stream = videoRef.current.srcObject as MediaStream | null;
-        const track = stream?.getVideoTracks()[0];
-        if (track) {
-          try {
-            const caps = (track.getCapabilities?.() ?? {}) as any;
-            const advanced: any[] = [];
-            if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) advanced.push({ focusMode: "continuous" });
-            if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) advanced.push({ exposureMode: "continuous" });
-            if (advanced.length) await track.applyConstraints({ advanced } as any);
-          } catch { /* iOS pode não expor controles avançados */ }
-        }
-
-        let lastTime = videoRef.current.currentTime;
-        watchdog = window.setInterval(() => {
-          if (disposed || detectedRef.current || !videoRef.current) return;
-          const now = videoRef.current.currentTime;
-          if (performance.now() - startTime > 2800 && Math.abs(now - lastTime) < 0.01) {
-            setStatus("A câmera travou no iOS. Use a foto abaixo ou reabra o leitor.");
-            setFallbackVisible(true);
-          }
-          lastTime = now;
-        }, 900);
-      } catch {
-        if (disposed) return;
-        setStatus("Não consegui manter a câmera ao vivo neste iPhone.");
-        setFallbackVisible(true);
+      } catch (failure) {
+        if (disposedRef.current) return;
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        const message = failure instanceof Error ? failure.message : "Não foi possível abrir a câmera.";
+        setError(message.includes("Permission") || message.includes("denied") || message.includes("NotAllowed")
+          ? "A câmera foi bloqueada. Libere a permissão de câmera para este PWA e toque em Tentar novamente."
+          : "Não consegui manter a câmera ao vivo. Feche outro app que esteja usando a câmera e tente novamente.");
+        setStatus("Leitor parado");
       }
-    };
+    }
 
-    void boot();
-    return () => {
-      disposed = true;
-      if (watchdog) window.clearInterval(watchdog);
-      void stopEverything();
-    };
-  }, []);
+    void startLiveScanner();
+    return () => { void stopEverything(); };
+  }, [attempt]);
 
-  async function scanFallbackPhoto(file: File) {
-    setFallbackBusy(true);
-    setStatus("Lendo foto...");
-    const host = document.createElement("div");
-    host.id = `nrd-fallback-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    host.style.position = "fixed";
-    host.style.left = "-10000px";
-    host.style.top = "-10000px";
-    host.style.width = "480px";
-    host.style.height = "480px";
-    document.body.appendChild(host);
+  async function toggleTorch() {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const enabled = !torch;
     try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode(host.id, { verbose: false });
-      const code = (await scanner.scanFile(file, true)).trim();
-      try { await scanner.clear(); } catch { /* opcional */ }
-      if (!code) throw new Error("sem código");
-      detectedRef.current = true;
-      onDetectedRef.current(code);
+      await track.applyConstraints({ advanced: [{ torch: enabled } as any] } as any);
+      setTorch(enabled);
     } catch {
-      setStatus("Não identifiquei o código. Enquadre as barras inteiras e tente outra vez.");
-    } finally {
-      host.remove();
-      setFallbackBusy(false);
-      if (fallbackInputRef.current) fallbackInputRef.current.value = "";
+      setTorchAvailable(false);
     }
   }
 
   return <div className="pc-modal-backdrop">
-    <section className="pc-camera-modal">
+    <section className="pc-camera-modal" role="dialog" aria-modal="true" aria-label="Leitor de código de barras">
       <header>
-        <div><p>Leitor contínuo</p><h2>Código de barras</h2></div>
-        <button onClick={onClose} aria-label="Fechar"><X /></button>
+        <div><p>Leitor ao vivo</p><h2>Ler código de barras</h2></div>
+        <button onClick={onClose} aria-label="Fechar câmera"><X /></button>
       </header>
+      <p className="pc-camera-help">Aponte para um único código de barras. A busca será automática.</p>
       <div className="pc-camera-stage pc-camera-stage--live">
         <video ref={videoRef} autoPlay playsInline muted />
         <div className="pc-camera-target" aria-hidden="true"><span /></div>
       </div>
       <p className="pc-camera-status">{status}</p>
-      {fallbackVisible && <label className={`pc-camera-fallback${fallbackBusy ? " is-disabled" : ""}`}>
-        <Camera size={18} /> {fallbackBusy ? "Analisando..." : "Usar câmera para tirar uma foto"}
-        <input
-          ref={fallbackInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          disabled={fallbackBusy}
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0];
-            if (file) void scanFallbackPhoto(file);
-          }}
-        />
-      </label>}
-      <button className="pc-camera-close" onClick={onClose}>Fechar</button>
+      {torchAvailable && <button className="pc-camera-torch" onClick={() => void toggleTorch()}>{torch ? "Desligar lanterna" : "Ligar lanterna"}</button>}
+      {error && <div className="pc-camera-error"><span>{error}</span><button onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</button></div>}
+      <button className="pc-camera-close" onClick={onClose}>Fechar câmera</button>
     </section>
   </div>;
-}
-
-function LegacyCameraScanner({ onDetected, onClose }: { onDetected: (code: string) => void; onClose: () => void }) {
-  const elementId = useMemo(() => `nrd-scanner-${Math.random().toString(36).slice(2)}`, []);
-  const scannerRef = useRef<Html5QrcodeLike | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [status, setStatus] = useState("Abrindo câmera...");
-  const stopped = useRef(false);
-
-  useEffect(() => {
-    stopped.current = false;
-    const scannerWindow = window as ScannerWindow;
-    async function stop() {
-      stopped.current = true;
-      if (scannerRef.current) {
-        await scannerRef.current.stop().catch(() => undefined);
-        scannerRef.current.clear();
-        scannerRef.current = null;
-      }
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    async function nativeScan(Detector: BarcodeDetectorConstructor) {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
-      streamRef.current = stream;
-      const video = videoRef.current;
-      if (!video) return;
-      video.srcObject = stream;
-      await video.play();
-      const detector = new Detector({ formats: ["ean_13", "ean_8", "code_128", "upc_a", "upc_e", "itf"] });
-      setStatus("Aponte a câmera para o código de barras");
-      const loop = async () => {
-        if (stopped.current) return;
-        try {
-          const found = await detector.detect(video);
-          const code = found[0]?.rawValue?.trim();
-          if (code) { await stop(); onDetected(code); return; }
-        } catch { /* tenta o próximo quadro */ }
-        window.setTimeout(() => void loop(), 220);
-      };
-      void loop();
-    }
-    async function fallbackScan() {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      if (stopped.current) return;
-      const scanner = new Html5Qrcode(elementId, { verbose: false });
-      scannerRef.current = scanner;
-      setStatus("Aponte a câmera para o código de barras");
-      await scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: { width: 320, height: 180 }, aspectRatio: 1.777 }, async (code) => {
-        if (!code.trim() || stopped.current) return;
-        await stop();
-        onDetected(code.trim());
-      }, () => undefined);
-    }
-    async function start() {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia) throw new Error("camera");
-        if (scannerWindow.BarcodeDetector) await nativeScan(scannerWindow.BarcodeDetector);
-        else await fallbackScan();
-      } catch {
-        setStatus("Não foi possível abrir a leitura automática. Confira a permissão da câmera e tente novamente.");
-      }
-    }
-    void start();
-    return () => { void stop(); };
-  }, [elementId, onDetected]);
-
-  return <div className="pc-modal-backdrop"><section className="pc-camera-modal" role="dialog" aria-modal="true">
-    <header><div><p>Leitor</p><h2>Escanear código</h2></div><button onClick={onClose}><X /></button></header>
-    <div className="pc-camera-stage"><video ref={videoRef} playsInline muted /><div id={elementId} className="pc-html5-reader" /><span className="pc-scan-line" /></div>
-    <p>{status}</p>
-    <button className="pc-camera-close" onClick={onClose}>Fechar câmera</button>
-  </section></div>;
 }
