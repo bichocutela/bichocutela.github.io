@@ -32,7 +32,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Aplicar scanner
-        run: python3 .github/scripts/patch_ios_android_scanner.py
+        run: |
+          python3 .github/scripts/patch_ios_android_scanner.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('source/client/src/pages/ProductConsultation.tsx')
+          s=p.read_text(encoding='utf-8').replace('[...value].some((char) => {', 'value.split("").some((char) => {')
+          p.write_text(s, encoding='utf-8')
+          PY
 
       - name: Remover arquivos temporários
         run: rm .github/workflows/ios-android-style-scanner-once.yml .github/scripts/patch_ios_android_scanner.py
