@@ -1,0 +1,28 @@
+/* Permite copiar informações do produto mesmo quando o PWA está instalado como app. */
+.nrd-modal--detail h2,
+.nrd-modal--detail .nrd-detail-eyebrow,
+.nrd-modal--detail .nrd-barcode strong,
+.nrd-modal--detail .nrd-barcode span,
+.nrd-modal--detail > small,
+.nrd-product-copy strong,
+.nrd-product-copy small,
+.nrd-code-tag {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default;
+  cursor: text;
+}
+
+.nrd-modal--detail .nrd-barcode strong {
+  touch-action: auto;
+}
+
+.nrd-modal--detail h2::selection,
+.nrd-modal--detail .nrd-detail-eyebrow::selection,
+.nrd-modal--detail .nrd-barcode strong::selection,
+.nrd-modal--detail .nrd-barcode span::selection,
+.nrd-product-copy strong::selection,
+.nrd-product-copy small::selection,
+.nrd-code-tag::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
