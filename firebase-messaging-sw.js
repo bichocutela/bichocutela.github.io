@@ -12,12 +12,10 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const CACHE_NAME = "nrd-codigos-shell-v9";
+const CACHE_NAME = "nrd-codigos-shell-v10";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
-  "/assets/index-Boh7fsCr.js",
-  "/assets/index-CYedQqpd.css",
 ];
 const PREFERENCES_DB = "nrd-pwa-preferences";
 const PREFERENCES_STORE = "settings";
@@ -163,7 +161,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/assets/")) {
+  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/manus-storage/")) {
     event.respondWith(staleWhileRevalidate(event, request));
     return;
   }
