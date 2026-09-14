@@ -245,11 +245,7 @@ export default function ProductConsultation() {
         </label>
         <button className="pc-camera-button" onClick={openCameraScanner} aria-label="Ler código pela câmera"><Camera /></button>
       </div>
-      <div className="pc-search-actions">
-        <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} aria-label="Filtrar categoria">
-          <option value="">Todas as categorias</option>
-          {categories.map((category) => <option key={category.id} value={category.id}>{category.description}</option>)}
-        </select>
+      <div className="pc-search-actions pc-search-actions--single">
         <button onClick={() => void runSearch(0, true)} disabled={query.trim().length < 2 || loading}><Search size={18} /> Pesquisar produto</button>
       </div>
       <div className="pc-search-status">
@@ -262,15 +258,7 @@ export default function ProductConsultation() {
     </section>
 
     <section className="pc-results" aria-live="polite">
-      {page.items.map((product) => <button className="pc-product-card" key={product.id} onClick={() => void openProduct(product)}>
-        <div className="pc-product-copy">
-          <strong>{product.description}</strong>
-          <span>Código: {product.code || "não informado"}{product.barcode ? ` · EAN: ${product.barcode}` : ""}</span>
-          <small>{product.categories.length ? product.categories.join(" · ") : "Varejo"}</small>
-        </div>
-        <div className="pc-product-price"><span>Preço principal</span><strong>{formatMoney(product.value)}</strong></div>
-        <ChevronRight size={20} />
-      </button>)}
+      {page.items.map((product) => <ProductResultCard key={product.id} product={product} onOpen={() => void openProduct(product)} />)}
       {query.trim().length >= 2 && !loading && !page.items.length && !error && <div className="pc-empty"><Search size={28} /><strong>Nenhum produto encontrado</strong><span>Tente parte do nome ou confira o código digitado.</span></div>}
     </section>
 
@@ -294,6 +282,36 @@ export default function ProductConsultation() {
     {configureOpen && role && <ConfigureDialog onClose={() => setConfigureOpen(false)} onSaved={() => { setConfigured(true); setConfigureOpen(false); toast.success("Acesso configurado."); }} />}
     {addOpen && selected && role && <AddToNrdDialog product={selected} onClose={() => setAddOpen(false)} />}
   </main>;
+}
+
+function ProductResultCard({ product, onOpen }: { product: ConsultationProduct; onOpen: () => void }) {
+  const [offers, setOffers] = useState<CommercialOffer[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void offersForProduct(product).then((items) => { if (alive) setOffers(items.filter((offer) => offer.family !== "PRICE")); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [product]);
+
+  const featured = offers.find((offer) => offer.price != null) || offers[0] || null;
+  return <button className={`pc-product-card${featured ? " pc-product-card--promo" : ""}`} onClick={onOpen}>
+    <div className="pc-product-copy">
+      <strong>{product.description}</strong>
+      <span>Código: {product.code || "não informado"}{product.barcode ? ` · EAN: ${product.barcode}` : ""}</span>
+      <small>{product.categories.length ? product.categories.join(" · ") : "Varejo"}</small>
+      {featured && <div className="pc-promo-badge">OFERTA</div>}
+    </div>
+    <div className="pc-product-price">
+      {featured ? <>
+        <span className="pc-promo-title">{featured.title}</span>
+        {featured.referencePrice != null && featured.price != null && featured.referencePrice > featured.price && <small className="pc-result-old-price">De {formatMoney(featured.referencePrice)}</small>}
+        <strong className="pc-result-promo-price">{featured.price != null ? formatMoney(featured.price) : (featured.headline || "Condição especial")}</strong>
+        {featured.headline && featured.price != null && <small className="pc-result-headline">{featured.headline}</small>}
+      </> : <>
+        <span>Preço principal</span><strong>{formatMoney(product.value)}</strong>
+      </>}
+    </div>
+    <ChevronRight size={20} />
+  </button>;
 }
 
 function ProductDetail({ product, offers, queriedAt, busy, canAdd, onRefresh, onAdd, onClose }: {
