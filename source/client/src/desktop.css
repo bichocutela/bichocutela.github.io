@@ -81,3 +81,26 @@
     width: min(82rem, calc(100% - 5rem));
   }
 }
+
+/* Desktop drawer: rolagem independente e segura. */
+@media (min-width: 1024px) {
+  .nrd-overlay { overflow: hidden; }
+  .nrd-drawer {
+    box-sizing: border-box;
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding-bottom: 2rem;
+  }
+  .nrd-drawer > header {
+    position: sticky;
+    top: -1rem;
+    z-index: 3;
+    margin: -1rem -1rem 0;
+    padding: 1rem 1rem .65rem;
+    background: #fffdf7;
+  }
+}
