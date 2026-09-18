@@ -17,6 +17,7 @@ import {
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { nrdAuth } from "@/lib/firebase";
+import { copyCardAsImage } from "@/lib/copyCardImage";
 import SyncedConsultationBanner from "@/components/SyncedConsultationBanner";
 import {
   addConsultationProductToNrd,
@@ -322,7 +323,17 @@ function ProductResultCard({ product, validityDocument, onOpen }: { product: Con
   }, [product, validityDocument]);
 
   const featured = offers.find((offer) => offer.price != null) || offers[0] || null;
-  return <button className={`pc-product-card${featured ? " pc-product-card--promo" : ""}`} onClick={onOpen}>
+
+  function copyCard(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const card = event.currentTarget;
+    void copyCardAsImage(card, "#f3f1f4")
+      .then(() => toast.success("Copiado na Área de Transferência"))
+      .catch(() => toast.error("Não foi possível copiar o quadradinho."));
+  }
+
+  return <button className={`pc-product-card pc-copyable-card${featured ? " pc-product-card--promo" : ""}`} onClick={onOpen} onContextMenu={copyCard}>
     <div className="pc-product-copy">
       <strong>{product.description}</strong>
       <span>Código: {product.code || "não informado"}{product.barcode ? ` · EAN: ${product.barcode}` : ""}</span>
