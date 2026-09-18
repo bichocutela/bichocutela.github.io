@@ -98,7 +98,11 @@ function offerValidityLabel(offer: CommercialOffer) {
   }
   if (offer.validTo) return `Válido até ${formatDate(offer.validTo)}`;
   if (offer.validFrom) return `Válido a partir de ${formatDate(offer.validFrom)}`;
-  return "";
+  return "Validade não confirmada";
+}
+
+function hasConfirmedValidity(offer: CommercialOffer) {
+  return Boolean(offer.validFrom || offer.validTo);
 }
 
 export default function ProductConsultation() {
@@ -331,7 +335,7 @@ function ProductResultCard({ product, validityDocument, onOpen }: { product: Con
         {featured.referencePrice != null && featured.price != null && featured.referencePrice > featured.price && <small className="pc-result-old-price">De {formatMoney(featured.referencePrice)}</small>}
         <strong className="pc-result-promo-price">{featured.price != null ? formatMoney(featured.price) : (featured.headline || "Condição especial")}</strong>
         {featured.headline && featured.price != null && <small className="pc-result-headline">{featured.headline}</small>}
-        {offerValidityLabel(featured) && <small className="pc-result-validity">{offerValidityLabel(featured)}</small>}
+        <small className={`pc-result-validity${hasConfirmedValidity(featured) ? "" : " pc-result-validity--pending"}`}>{offerValidityLabel(featured)}</small>
       </> : <>
         <span>Preço principal</span><strong>{formatMoney(product.value)}</strong>
       </>}
@@ -374,7 +378,7 @@ function ProductDetail({ product, offers, queriedAt, busy, canAdd, onRefresh, on
         {offer.referencePrice && offer.price && offer.referencePrice > offer.price && <small className="pc-old-price">De {formatMoney(offer.referencePrice)}</small>}
         {offer.price && <strong className="pc-offer-price">{formatMoney(offer.price)}</strong>}
         <p>{offer.detail}</p>
-        {offerValidityLabel(offer) && <small className="pc-offer-validity">{offerValidityLabel(offer)}</small>}
+        <small className={`pc-offer-validity${hasConfirmedValidity(offer) ? "" : " pc-offer-validity--pending"}`}>{offerValidityLabel(offer)}</small>
         {offer.flyerName && <small className="pc-flyer-source">{offer.flyerName}</small>}
       </article>) : <article className="pc-offer pc-offer--price"><header>PREÇO CADASTRADO</header><strong className="pc-offer-price">{formatMoney(product.value)}</strong><p>Nenhuma condição promocional explícita foi identificada nos dados consultados.</p></article>}
     </div>
