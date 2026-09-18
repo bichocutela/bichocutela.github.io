@@ -228,8 +228,11 @@ export async function configureConsultation(login: string, password: string) {
 export async function searchConsultationProducts(query: string, page = 0, categoryId = "", fresh = false): Promise<ConsultationPage> {
   const payload = await edge({ action: "search", query: query.trim(), page, categoryId, fresh });
   const items = Array.isArray(payload.items) ? payload.items.map(parseProduct).filter((item): item is ConsultationProduct => item !== null) : [];
+  const orderedItems = [...items].sort((left, right) =>
+    left.description.localeCompare(right.description, "pt-BR", { sensitivity: "base", numeric: true }),
+  );
   return {
-    items,
+    items: orderedItems,
     pageIndex: Math.max(0, Number(payload.pageIndex) || 0),
     totalPages: Math.max(0, Number(payload.totalPages) || 0),
     totalCount: Math.max(0, Number(payload.totalCount) || items.length),
