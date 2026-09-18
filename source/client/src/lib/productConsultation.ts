@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { nrdAuth, nrdDb } from "@/lib/firebase";
 import { normalizeSearch } from "@/lib/nrd";
 import { parseCategories, roleForUser, type ManagedCategory, type ManagementRole } from "@/lib/managementData";
@@ -52,7 +52,11 @@ export type CommercialOffer = {
   flyerName?: string;
   validFrom?: string;
   validTo?: string;
+  /** Família usada pelo Android para a validade quando difere da família visual do PWA. */
+  validityFamily?: string;
 };
+
+export type OfferValidityDocument = Record<string, unknown>;
 
 type EdgeResponse = Record<string, unknown>;
 
@@ -99,6 +103,47 @@ function text(value: unknown): string {
 function textArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => text(entry)).filter(Boolean);
+}
+
+export function observeOfferValidityDocument(onChange: (data: OfferValidityDocument) => void) {
+  return onSnapshot(
+    doc(nrdDb, "config", "acpOfferValidity"),
+    (snapshot) => onChange(snapshot.data() ?? {}),
+    () => onChange({}),
+  );
+}
+
+async function offerValidityKey(productName: string, family: string) {
+  const raw = `${productName.trim().toLowerCase()}|${family}`;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function applyAndroidValidity(
+  productName: string,
+  offers: CommercialOffer[],
+  validityDocument?: OfferValidityDocument,
+): Promise<CommercialOffer[]> {
+  if (!validityDocument || !Object.keys(validityDocument).length) return offers;
+  try {
+    return await Promise.all(offers.map(async (offer) => {
+      const family = offer.validityFamily || offer.family;
+      const key = await offerValidityKey(productName, family);
+      const raw = validityDocument[key];
+      if (!raw || typeof raw !== "object") return offer;
+      const validity = raw as Record<string, unknown>;
+      const startDate = text(validity.startDate);
+      const endDate = text(validity.endDate);
+      if (!startDate && !endDate) return offer;
+      return {
+        ...offer,
+        validFrom: startDate || offer.validFrom,
+        validTo: endDate || offer.validTo,
+      };
+    }));
+  } catch {
+    return offers;
+  }
 }
 
 function parseProduct(raw: unknown): ConsultationProduct | null {
@@ -260,7 +305,7 @@ function baseOffers(product: ConsultationProduct): CommercialOffer[] {
     offers.push({ family: "CASHBACK", title: "Cashback", headline: `${qty(product.cashback)}% DE VOLTA`, detail: `${qty(product.cashback)}% de retorno. Não é desconto imediato.`, referencePrice: product.value });
   }
   if (positive(product.cashbackValue)) {
-    offers.push({ family: "CASHBACK", title: "Cashback", headline: `${money(product.cashbackValue!)} DE VOLTA`, detail: `${money(product.cashbackValue!)} de retorno. Não é desconto imediato.`, referencePrice: product.value });
+    offers.push({ family: "CASHBACK", validityFamily: "CASHBACK_VALUE", title: "Cashback", headline: `${money(product.cashbackValue!)} DE VOLTA`, detail: `${money(product.cashbackValue!)} de retorno. Não é desconto imediato.`, referencePrice: product.value });
   }
   return offers;
 }
@@ -304,7 +349,7 @@ function flyerOfferToCommercial(offer: FlyerOfferRaw, campaign: FlyerCampaignRaw
   if (type === "CASHBACK") {
     const percent = number(offer.cashbackPercent); const value = number(offer.cashbackValue);
     if (positive(percent)) return { family: "CASHBACK", title: "Cashback", headline: `${qty(percent)}% DE VOLTA`, detail: `${qty(percent)}% de retorno. Não é desconto imediato.`, referencePrice: base, ...common };
-    if (positive(value)) return { family: "CASHBACK", title: "Cashback", headline: `${money(value!)} DE VOLTA`, detail: `${money(value!)} de retorno. Não é desconto imediato.`, referencePrice: base, ...common };
+    if (positive(value)) return { family: "CASHBACK", validityFamily: "CASHBACK_VALUE", title: "Cashback", headline: `${money(value!)} DE VOLTA`, detail: `${money(value!)} de retorno. Não é desconto imediato.`, referencePrice: base, ...common };
   }
   if (type === "FLYER_PRICE") {
     const promo = number(offer.flyerPrice);
@@ -340,9 +385,16 @@ async function flyerOffers(product: ConsultationProduct): Promise<CommercialOffe
   }
 }
 
-export async function offersForProduct(product: ConsultationProduct): Promise<CommercialOffer[]> {
+export async function offersForProduct(
+  product: ConsultationProduct,
+  validityDocument?: OfferValidityDocument,
+): Promise<CommercialOffer[]> {
   const priority: Record<CommercialOffer["family"], number> = { SECOND_UNIT: 0, TAKE_PAY: 1, CLUB: 2, DE_POR: 3, WHOLESALE: 4, CASHBACK: 5, PRICE: 6 };
-  const all = [...baseOffers(product), ...(await flyerOffers(product))];
+  const all = await applyAndroidValidity(
+    product.description,
+    [...baseOffers(product), ...(await flyerOffers(product))],
+    validityDocument,
+  );
   const seen = new Set<string>();
   return all.filter((offer) => {
     const key = `${offer.family}|${offer.headline}|${offer.price ?? ""}|${offer.flyerName ?? ""}`;
