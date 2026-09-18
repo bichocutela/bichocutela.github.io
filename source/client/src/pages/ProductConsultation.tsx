@@ -28,9 +28,11 @@ import {
   loadConsultationCategories,
   loadNrdCategories,
   offersForProduct,
+  observeOfferValidityDocument,
   refreshConsultationProduct,
   searchConsultationProducts,
   type CommercialOffer,
+  type OfferValidityDocument,
   type ConsultationCategory,
   type ConsultationPage,
   type ConsultationProduct,
@@ -89,6 +91,16 @@ function offerClass(offer: CommercialOffer) {
   return `pc-offer pc-offer--${offer.family.toLowerCase()}`;
 }
 
+function offerValidityLabel(offer: CommercialOffer) {
+  if (offer.validFrom && offer.validTo) {
+    if (offer.validFrom === offer.validTo) return `Válido em ${formatDate(offer.validTo)}`;
+    return `Válido de ${formatDate(offer.validFrom)} até ${formatDate(offer.validTo)}`;
+  }
+  if (offer.validTo) return `Válido até ${formatDate(offer.validTo)}`;
+  if (offer.validFrom) return `Válido a partir de ${formatDate(offer.validFrom)}`;
+  return "";
+}
+
 export default function ProductConsultation() {
   const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
@@ -101,6 +113,7 @@ export default function ProductConsultation() {
   const [role, setRole] = useState<ManagementRole | null>(null);
   const [selected, setSelected] = useState<ConsultationProduct | null>(null);
   const [selectedOffers, setSelectedOffers] = useState<CommercialOffer[]>([]);
+  const [offerValidityDocument, setOfferValidityDocument] = useState<OfferValidityDocument>({});
   const [queriedAt, setQueriedAt] = useState<string | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -120,6 +133,17 @@ export default function ProductConsultation() {
     });
     return () => { alive = false; unsubscribe(); };
   }, []);
+
+  useEffect(() => observeOfferValidityDocument(setOfferValidityDocument), []);
+
+  useEffect(() => {
+    if (!selected) return;
+    let alive = true;
+    void offersForProduct(selected, offerValidityDocument)
+      .then((items) => { if (alive) setSelectedOffers(items); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [selected, offerValidityDocument]);
 
   async function runSearch(targetPage = 0, fresh = false, searchOverride?: string, categoryOverride?: string) {
     const clean = (searchOverride ?? query).trim();
@@ -167,13 +191,13 @@ export default function ProductConsultation() {
     setSelected(product);
     setQueriedAt(new Date().toISOString());
     setDetailBusy(false);
-    setSelectedOffers(await offersForProduct(product));
+    setSelectedOffers(await offersForProduct(product, offerValidityDocument));
     setDetailBusy(true);
     try {
       const fresh = await refreshConsultationProduct(product);
       setSelected(fresh.product);
       setQueriedAt(fresh.queriedAt);
-      setSelectedOffers(await offersForProduct(fresh.product));
+      setSelectedOffers(await offersForProduct(fresh.product, offerValidityDocument));
     } catch {
       // O card já contém o resultado recém-consultado. Não bloqueie a abertura por uma atualização complementar.
     } finally {
@@ -188,7 +212,7 @@ export default function ProductConsultation() {
       const fresh = await refreshConsultationProduct(selected);
       setSelected(fresh.product);
       setQueriedAt(fresh.queriedAt);
-      setSelectedOffers(await offersForProduct(fresh.product));
+      setSelectedOffers(await offersForProduct(fresh.product, offerValidityDocument));
       toast.success("Preços atualizados.");
     } catch (failure) {
       toast.error(failure instanceof Error ? failure.message : "Não foi possível atualizar agora.");
@@ -259,7 +283,7 @@ export default function ProductConsultation() {
     </section>
 
     <section className="pc-results" aria-live="polite">
-      {page.items.map((product) => <ProductResultCard key={product.id} product={product} onOpen={() => void openProduct(product)} />)}
+      {page.items.map((product) => <ProductResultCard key={product.id} product={product} validityDocument={offerValidityDocument} onOpen={() => void openProduct(product)} />)}
       {query.trim().length >= 2 && !loading && !page.items.length && !error && <div className="pc-empty"><Search size={28} /><strong>Nenhum produto encontrado</strong><span>Tente parte do nome ou confira o código digitado.</span></div>}
     </section>
 
@@ -285,13 +309,13 @@ export default function ProductConsultation() {
   </main>;
 }
 
-function ProductResultCard({ product, onOpen }: { product: ConsultationProduct; onOpen: () => void }) {
+function ProductResultCard({ product, validityDocument, onOpen }: { product: ConsultationProduct; validityDocument: OfferValidityDocument; onOpen: () => void }) {
   const [offers, setOffers] = useState<CommercialOffer[]>([]);
   useEffect(() => {
     let alive = true;
-    void offersForProduct(product).then((items) => { if (alive) setOffers(items.filter((offer) => offer.family !== "PRICE")); }).catch(() => undefined);
+    void offersForProduct(product, validityDocument).then((items) => { if (alive) setOffers(items.filter((offer) => offer.family !== "PRICE")); }).catch(() => undefined);
     return () => { alive = false; };
-  }, [product]);
+  }, [product, validityDocument]);
 
   const featured = offers.find((offer) => offer.price != null) || offers[0] || null;
   return <button className={`pc-product-card${featured ? " pc-product-card--promo" : ""}`} onClick={onOpen}>
@@ -307,6 +331,7 @@ function ProductResultCard({ product, onOpen }: { product: ConsultationProduct; 
         {featured.referencePrice != null && featured.price != null && featured.referencePrice > featured.price && <small className="pc-result-old-price">De {formatMoney(featured.referencePrice)}</small>}
         <strong className="pc-result-promo-price">{featured.price != null ? formatMoney(featured.price) : (featured.headline || "Condição especial")}</strong>
         {featured.headline && featured.price != null && <small className="pc-result-headline">{featured.headline}</small>}
+        {offerValidityLabel(featured) && <small className="pc-result-validity">{offerValidityLabel(featured)}</small>}
       </> : <>
         <span>Preço principal</span><strong>{formatMoney(product.value)}</strong>
       </>}
@@ -349,7 +374,8 @@ function ProductDetail({ product, offers, queriedAt, busy, canAdd, onRefresh, on
         {offer.referencePrice && offer.price && offer.referencePrice > offer.price && <small className="pc-old-price">De {formatMoney(offer.referencePrice)}</small>}
         {offer.price && <strong className="pc-offer-price">{formatMoney(offer.price)}</strong>}
         <p>{offer.detail}</p>
-        {offer.flyerName && <small className="pc-flyer-source">{offer.flyerName}{offer.validFrom && offer.validTo ? ` · ${formatDate(offer.validFrom)} a ${formatDate(offer.validTo)}` : ""}</small>}
+        {offerValidityLabel(offer) && <small className="pc-offer-validity">{offerValidityLabel(offer)}</small>}
+        {offer.flyerName && <small className="pc-flyer-source">{offer.flyerName}</small>}
       </article>) : <article className="pc-offer pc-offer--price"><header>PREÇO CADASTRADO</header><strong className="pc-offer-price">{formatMoney(product.value)}</strong><p>Nenhuma condição promocional explícita foi identificada nos dados consultados.</p></article>}
     </div>
     <details className="pc-sync"><summary>Sincronização</summary><p>Última consulta desta ficha: {formatConsultedAt(queriedAt)}.</p></details>
