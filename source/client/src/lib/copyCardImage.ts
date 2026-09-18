@@ -15,7 +15,52 @@ function inlineComputedStyles(source: Element, target: Element) {
   });
 }
 
-async function elementToPngBlob(element: HTMLElement, backgroundColor: string): Promise<Blob> {
+type CopyCardStyle = "source" | "consultation-light";
+
+function applyConsultationLightStyle(clone: HTMLElement, backgroundColor: string) {
+  clone.style.background = "#ffffff";
+  clone.style.color = "#202124";
+  clone.style.border = "1px solid #dedede";
+  clone.style.borderRadius = "16px";
+  clone.style.boxShadow = "0 3px 11px rgba(0,0,0,.045)";
+  clone.style.overflow = "hidden";
+
+  const main = clone.querySelector<HTMLElement>(".nrd-product-card__main");
+  if (main) {
+    main.style.background = "transparent";
+    main.style.color = "#202124";
+  }
+
+  const title = clone.querySelector<HTMLElement>(".nrd-product-copy strong");
+  if (title) title.style.color = "#202124";
+
+  const meta = clone.querySelector<HTMLElement>(".nrd-product-copy small");
+  if (meta) meta.style.color = "#696969";
+
+  const code = clone.querySelector<HTMLElement>(".nrd-code-tag");
+  if (code) {
+    code.style.background = "#eff3ee";
+    code.style.color = "#3c5e49";
+    code.style.border = "0";
+  }
+
+  const initial = clone.querySelector<HTMLElement>(".nrd-product-initial");
+  if (initial) initial.style.color = "#ffffff";
+
+  const favorite = clone.querySelector<HTMLElement>(".nrd-favorite");
+  if (favorite) {
+    favorite.style.background = "transparent";
+    favorite.style.borderLeftColor = "#edf0eb";
+  }
+
+  clone.querySelectorAll<HTMLElement>("svg").forEach((svg) => {
+    svg.style.color = "#8a9b8e";
+  });
+
+  clone.style.setProperty("--card-copy-background", backgroundColor);
+}
+
+async function elementToPngBlob(element: HTMLElement, backgroundColor: string, style: CopyCardStyle): Promise<Blob> {
   await document.fonts?.ready;
 
   const rect = element.getBoundingClientRect();
@@ -29,6 +74,9 @@ async function elementToPngBlob(element: HTMLElement, backgroundColor: string): 
   clone.style.height = `${height}px`;
   clone.style.maxWidth = "none";
   clone.style.boxSizing = "border-box";
+  if (style === "consultation-light") {
+    applyConsultationLightStyle(clone, backgroundColor);
+  }
 
   const wrapper = document.createElement("div");
   wrapper.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
@@ -73,12 +121,12 @@ async function elementToPngBlob(element: HTMLElement, backgroundColor: string): 
   }
 }
 
-export async function copyCardAsImage(element: HTMLElement, backgroundColor = "#f3f3f3") {
+export async function copyCardAsImage(element: HTMLElement, backgroundColor = "#f3f3f3", style: CopyCardStyle = "source") {
   if (!window.isSecureContext || !navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
     throw new Error("A cópia de imagem não está disponível neste navegador.");
   }
 
-  const pngPromise = elementToPngBlob(element, backgroundColor);
+  const pngPromise = elementToPngBlob(element, backgroundColor, style);
   await navigator.clipboard.write([
     new ClipboardItem({
       "image/png": pngPromise,
