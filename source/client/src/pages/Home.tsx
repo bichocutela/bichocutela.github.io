@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNrdCatalog } from "@/hooks/useNrdData";
+import { copyCardAsImage } from "@/lib/copyCardImage";
 import {
   listNotificationHistory,
   markAllNotificationsRead,
@@ -392,7 +393,16 @@ function ProductList({ products, favorites, onOpen, onFavorite, compact = false 
 }
 
 function ProductCard({ product, index, favorite, onOpen, onFavorite }: { product: Product; index: number; favorite: boolean; onOpen: (product: Product) => void; onFavorite: (code: string) => void }) {
-  return <article className="nrd-product-card">
+  function copyCard(event: React.MouseEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const card = event.currentTarget;
+    void copyCardAsImage(card, "#e5e5e5")
+      .then(() => toast.success("Copiado na Área de Transferência"))
+      .catch(() => toast.error("Não foi possível copiar o quadradinho."));
+  }
+
+  return <article className="nrd-product-card nrd-copyable-card" onContextMenu={copyCard}>
     <button className="nrd-product-card__main" onClick={() => onOpen(product)}>
       <span className="nrd-sector-line" style={{ backgroundColor: categoryColor(index) }} />
       <span className="nrd-product-initial" style={{ backgroundColor: categoryColor(index) }}>{product.name.slice(0, 1).toUpperCase()}</span>
