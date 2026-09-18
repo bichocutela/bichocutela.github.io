@@ -397,7 +397,7 @@ function ProductCard({ product, index, favorite, onOpen, onFavorite }: { product
     event.preventDefault();
     event.stopPropagation();
     const card = event.currentTarget;
-    void copyCardAsImage(card, "#e5e5e5")
+    void copyCardAsImage(card, "#f3f1f4", "consultation-light")
       .then(() => toast.success("Copiado na Área de Transferência"))
       .catch(() => toast.error("Não foi possível copiar o quadradinho."));
   }
