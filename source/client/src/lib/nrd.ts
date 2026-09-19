@@ -99,12 +99,14 @@ export function isThemeBackgroundAvailable(background: ThemeBackground, date = t
   const endRaw = background.endDate?.trim();
   const start = normalizeIsoDate(startRaw);
   const end = normalizeIsoDate(endRaw);
-  if ((startRaw && !start) || (endRaw && !end)) return false;
-  return (!start || date >= start) && (!end || date <= end);
+  if (!start || (endRaw && !end)) return false;
+  return date >= start && (!end || date <= end);
 }
 
 export function activeBackgroundFor(settings: AppearanceSettings, theme: ThemeKey, date = todayIsoDate()) {
-  return settings.themeBackgrounds[theme]?.find((item) => isThemeBackgroundAvailable(item, date)) ?? null;
+  return settings.themeBackgrounds[theme]
+    ?.filter((item) => isThemeBackgroundAvailable(item, date))
+    .sort((left, right) => normalizeIsoDate(right.startDate)?.localeCompare(normalizeIsoDate(left.startDate) ?? "") ?? 0)[0] ?? null;
 }
 
 export function productFromRemote(id: string, raw: Record<string, unknown>): Product | null {
