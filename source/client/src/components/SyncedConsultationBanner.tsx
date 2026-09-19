@@ -33,7 +33,9 @@ function todayIsoDate() {
 function normalizedDate(value: unknown) {
   if (typeof value !== "string") return null;
   const clean = value.trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(clean) ? clean : null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
+  const parsed = new Date(`${clean}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== clean ? null : clean;
 }
 
 function boundedNumber(value: unknown, fallback: number, minimum: number, maximum: number) {
@@ -68,7 +70,9 @@ function parseBackgrounds(raw: unknown): ConsultationBackground[] {
 function activeBackground(items: ConsultationBackground[]) {
   const today = todayIsoDate();
   return items
-    .filter((item) => item.isActive && (!item.startDate || today >= item.startDate) && (!item.endDate || today <= item.endDate))
+    // Keep the same availability contract as Android: an active background
+    // must have a valid start date, and the end date is inclusive.
+    .filter((item) => item.isActive && Boolean(item.startDate) && today >= item.startDate! && (!item.endDate || today <= item.endDate))
     .sort((left, right) => (right.startDate ?? "").localeCompare(left.startDate ?? ""))[0] ?? null;
 }
 
