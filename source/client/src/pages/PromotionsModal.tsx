@@ -170,7 +170,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
   }
 
   async function load(session = token) {
-    if (!session || loading) return;
+    if (!session) return;
     setLoading(true);
     setError(null);
     try {
@@ -196,10 +196,10 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
       const session = await loginPromotions(cpf, password);
       setToken(session);
       setPassword("");
-      const nextOffers = await fetchPromotions(session);
-      setOffers(nextOffers);
-      applyFavoriteStore(nextOffers);
       setPage(1);
+      // O Android entra assim que o login é autenticado; as promoções carregam depois.
+      setLoading(false);
+      void load(session);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível entrar.");
     } finally {
