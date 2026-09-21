@@ -1,5 +1,5 @@
 const API_BASE = "https://app.nordestao.com.br/nossa-gente/v1";
-const REQUEST_TIMEOUT_MS = 20000;
+const REQUEST_TIMEOUT_MS = 45000;
 
 const STORE_NAMES: Record<string, string> = {
   "0001": "Matriz Parnamirim",
