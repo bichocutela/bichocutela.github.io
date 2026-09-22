@@ -213,19 +213,30 @@ async function apiRequest(path: string, init: RequestInit) {
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${API_BASE}${path}`, {
+    const request = () => fetch(`${API_BASE}${path}`, {
       ...init,
       cache: "no-store",
+      mode: "cors",
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-        "Cache-Control": "no-cache, no-store",
-        Pragma: "no-cache",
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...(init.headers ?? {}),
       },
     });
+
+    // O Android não depende de preflight CORS. No navegador, cabeçalhos de
+    // cache e X-Requested-With tornavam a chamada mais frágil em algumas redes.
+    // Mantemos somente os cabeçalhos necessários e repetimos uma falha de rede
+    // imediata uma vez, sem repetir respostas HTTP do servidor.
+    let response: Response;
+    try {
+      response = await request();
+    } catch (error) {
+      if (!(error instanceof TypeError) || controller.signal.aborted) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      response = await request();
+    }
 
     const body = await response.json().catch(() => null);
     if (!response.ok) {
@@ -239,6 +250,9 @@ async function apiRequest(path: string, init: RequestInit) {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("O Nossa Gente demorou demais para responder. Tente novamente.");
+    }
+    if (error instanceof TypeError) {
+      throw new Error("Não foi possível conectar ao Nossa Gente. Verifique a internet e tente novamente.");
     }
     throw error;
   } finally {
