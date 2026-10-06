@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BitArray, Code128Reader, EAN13Reader } from "@zxing/library";
 import { barcodeBits, barcodeLayout, barcodeSvgFor, code128Values, validEan13 } from "./androidBarcode";
 
 describe("Android barcode parity", () => {
@@ -7,6 +8,21 @@ describe("Android barcode parity", () => {
     expect(code128Values("2517835")).toEqual([105, 25, 17, 83, 100, 21, 94, 106]);
     expect(code128Values("000007")).toEqual([105, 0, 0, 7, 23, 106]);
     expect(code128Values("AB12345")).toEqual([104, 33, 34, 17, 99, 23, 45, 7, 106]);
+  });
+  it("decodes the generated bars back to the exact reference with ZXing", () => {
+    for (const profile of ["Padrão", "Symbol", "Datalogic"] as const) {
+      for (const value of ["257895", "2517835", "000007", "AB12345", "5604885098906", "5604885098907"]) {
+        const layout = barcodeLayout(value, profile)!;
+        const row = new BitArray(layout.width);
+        for (let index = 0; index < layout.bits.length; index++) {
+          if (layout.bits[index] === "1") {
+            for (let pixel = 0; pixel < layout.scale; pixel++) row.set(layout.left + index * layout.scale + pixel);
+          }
+        }
+        const reader = validEan13(value) ? new EAN13Reader() : new Code128Reader();
+        expect(reader.decodeRow(0, row, new Map()).getText()).toBe(value);
+      }
+    }
   });
   it("uses EAN-13 only for a valid checksum", () => {
     expect(validEan13("5604885098906")).toBe(true);
