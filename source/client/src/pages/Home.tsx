@@ -1,3 +1,5 @@
+import { usePwaVisibility } from "@/contexts/PwaContext";
+import { useLocation } from "wouter";
 /** Catálogo em Movimento: wayfinding de varejo, foco na consulta e contraste garantido. */
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
@@ -109,6 +111,7 @@ function formatTime(value?: number) {
 }
 
 export default function Home() {
+  const pwa = usePwaVisibility();
   const { products, settings, categories, catalogReady, error } = useNrdCatalog();
   const [preferences, setPreferences] = useStoredState<LocalPreferences>("nrd-pwa-preferences-v2", initialPreferences);
   const [favorites, setFavorites] = useStoredState<string[]>("nrd-pwa-favorites", []);
@@ -377,7 +380,7 @@ export default function Home() {
       {installOpen && <InstallModal onInstall={installPwa} onClose={() => setInstallOpen(false)} />}
       {qrPlatform && <QrInstallModal platform={qrPlatform} onInstallPwa={installPwa} onClose={() => setQrPlatform(null)} />}
       {notificationsOpen && <NotificationsModal notifications={notifications} onOpen={openNotification} onReadAll={readAllNotifications} onClose={() => setNotificationsOpen(false)} />}
-      {promotionsOpen && <Suspense fallback={null}><PromotionsModal onClose={() => setPromotionsOpen(false)} /></Suspense>}
+      {promotionsOpen && pwa.promotions && <Suspense fallback={null}><PromotionsModal onClose={() => setPromotionsOpen(false)} /></Suspense>}
     </main>
   );
 }
@@ -418,7 +421,9 @@ function EmptySearch({ onReset }: { onReset: () => void }) {
 }
 
 function NavigationDrawer({ categories, onClose, onOpenCategory, onOpenPromotions, onOpenSettings, onInstallIphone, onInstallAndroid }: { categories: { id: string; name: string }[]; onClose: () => void; onOpenCategory: (category: string) => void; onOpenPromotions: () => void; onOpenSettings: () => void; onInstallIphone: () => void; onInstallAndroid: () => void }) {
-  return <div className="nrd-overlay" role="presentation" onMouseDown={onClose}><aside className="nrd-drawer" role="dialog" aria-label="Navegação" onMouseDown={(event) => event.stopPropagation()}><header><img src={logoUrl} alt="" /><button onClick={onClose} aria-label="Fechar menu"><X /></button></header><p className="nrd-drawer-eyebrow">Navegação</p><button className="nrd-drawer-link" onClick={onClose}><Monitor size={17} /> Início</button>{categories.map((category) => <button key={category.id} className="nrd-drawer-link" onClick={() => onOpenCategory(category.name)}><span className="nrd-drawer-dot" />{category.name}<ChevronRight size={15} /></button>)}<div className="nrd-drawer-divider" /><button className="nrd-drawer-link" onClick={onOpenPromotions}><Tags size={17} /> Promoções<ChevronRight size={15} /></button><button className="nrd-drawer-link" onClick={onOpenSettings}><Settings2 size={17} /> Configurações</button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallIphone}><Apple size={17} /> Instalar via iPhone<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallAndroid}><Smartphone size={17} /> Instalar via Android<ChevronRight size={15} /></button></aside></div>;
+  const pwa = usePwaVisibility();
+  const [, navigate] = useLocation();
+  return <div className="nrd-overlay" role="presentation" onMouseDown={onClose}><aside className="nrd-drawer" role="dialog" aria-label="Navegação" onMouseDown={(event) => event.stopPropagation()}><header><img src={logoUrl} alt="" /><button onClick={onClose} aria-label="Fechar menu"><X /></button></header><p className="nrd-drawer-eyebrow">Navegação</p><button className="nrd-drawer-link" onClick={onClose}><Monitor size={17} /> Início</button>{categories.map((category) => <button key={category.id} className="nrd-drawer-link" onClick={() => onOpenCategory(category.name)}><span className="nrd-drawer-dot" />{category.name}<ChevronRight size={15} /></button>)}<div className="nrd-drawer-divider" />{pwa.promotions && <button className="nrd-drawer-link" onClick={onOpenPromotions}><Tags size={17} /> Promoções<ChevronRight size={15} /></button>}{pwa.priceConsultation && <button className="nrd-drawer-link" onClick={() => { onClose(); navigate("/consultar-produtos"); }}><Search size={17} /> Consultar Preços<ChevronRight size={15} /></button>}<button className="nrd-drawer-link" onClick={onOpenSettings}><Settings2 size={17} /> Configurações</button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallIphone}><Apple size={17} /> Instalar via iPhone<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallAndroid}><Smartphone size={17} /> Instalar via Android<ChevronRight size={15} /></button></aside></div>;
 }
 
 function ProductModal({ title, products, favorites, onClose, onOpen, onFavorite }: { title: string; products: Product[]; favorites: string[]; onClose: () => void; onOpen: (product: Product) => void; onFavorite: (code: string) => void }) {
