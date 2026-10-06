@@ -1,7 +1,7 @@
 /** NRD Lojas PWA: experiência mobile alinhada ao aplicativo Android. */
 import { lazy, Suspense } from "react";
 import ManagementPanelEntry from "@/components/ManagementPanelEntry";
-import ProductConsultationEntry from "@/components/ProductConsultationEntry";
+import { PwaProvider, usePwaVisibility } from "@/contexts/PwaContext";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -12,11 +12,16 @@ import Home from "./pages/Home";
 
 const ProductConsultation = lazy(() => import("@/pages/ProductConsultation"));
 
+function ConsultationRoute() {
+  const { priceConsultation } = usePwaVisibility();
+  return priceConsultation ? <ProductConsultation /> : <Home />;
+}
+
 function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
-      <Route path={"/consultar-produtos"} component={ProductConsultation} />
+      <Route path={"/consultar-produtos"} component={ConsultationRoute} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -26,16 +31,15 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
+      <PwaProvider><ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
-          <ProductConsultationEntry />
           <ManagementPanelEntry />
           <Suspense fallback={<div className="nrd-status">Carregando...</div>}>
             <Router />
           </Suspense>
         </TooltipProvider>
-      </ThemeProvider>
+      </ThemeProvider></PwaProvider>
     </ErrorBoundary>
   );
 }

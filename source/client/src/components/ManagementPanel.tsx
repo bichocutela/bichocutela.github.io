@@ -1,3 +1,4 @@
+import { pwaVisibilityFromRemote } from "@/lib/pwaVisibility";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import "./ManagementPanel.css";
 import "./ManagementPanelDesktop.css";
@@ -65,7 +66,7 @@ import {
   type ThemeBackground,
 } from "@/lib/managementData";
 
-type Section = "dashboard" | "products" | "suggestions" | "categories" | "tabs" | "home" | "appearance" | "notifications" | "advanced";
+type Section = "dashboard" | "products" | "suggestions" | "categories" | "tabs" | "home" | "appearance" | "notifications" | "advanced" | "pwa";
 const EMPTY_DATA: ManagementData = { settings: {}, products: [], categories: [], tabs: [], suggestions: [], snapshots: [] };
 const PAGE_SIZE = 50;
 
@@ -130,7 +131,7 @@ export default function ManagementPanel({ initiallyOpen = false, manageDrawerEnt
     <header className="nrd-management-header"><div><p>NRD Códigos</p><h2>{role === "mestre" ? "Painel Mestre" : "Painel administrativo"}</h2></div><button className="nrd-management-icon" onClick={() => setOpen(false)} aria-label="Fechar"><X /></button></header>
     {!authReady ? <Loading text="Verificando sessão..." /> : !role ? <Login onRole={setRole} /> : <>
       <div className="nrd-management-session"><span><ShieldCheck size={17} /> Sessão {role === "mestre" ? "Mestre" : "ADM"}</span><div><button onClick={() => void refresh(true)} disabled={loading}><RefreshCw size={16} /> Atualizar</button><button onClick={() => void signOut(nrdAuth)}><LogOut size={16} /> Sair</button></div></div>
-      <nav className="nrd-management-nav">{role === "mestre" && <Nav active={section === "dashboard"} onClick={() => setSection("dashboard")} icon={<LayoutDashboard size={17} />} label="Visão geral" />}<Nav active={section === "products"} onClick={() => setSection("products")} icon={<Package size={17} />} label="Produtos" />{role === "mestre" && <><Nav active={section === "suggestions"} onClick={() => setSection("suggestions")} icon={<MessageSquareText size={17} />} label="Pendências" /><Nav active={section === "categories"} onClick={() => setSection("categories")} icon={<FileSpreadsheet size={17} />} label="Categorias" /><Nav active={section === "tabs"} onClick={() => setSection("tabs")} icon={<FileSpreadsheet size={17} />} label="Abas" /><Nav active={section === "home"} onClick={() => setSection("home")} icon={<Settings2 size={17} />} label="Home" /><Nav active={section === "appearance"} onClick={() => setSection("appearance")} icon={<Palette size={17} />} label="Aparência" /><Nav active={section === "notifications"} onClick={() => setSection("notifications")} icon={<Bell size={17} />} label="Notificações" /><Nav active={section === "advanced"} onClick={() => setSection("advanced")} icon={<Database size={17} />} label="Avançado" /></>}</nav>
+      <nav className="nrd-management-nav">{role === "mestre" && <Nav active={section === "dashboard"} onClick={() => setSection("dashboard")} icon={<LayoutDashboard size={17} />} label="Visão geral" />}<Nav active={section === "products"} onClick={() => setSection("products")} icon={<Package size={17} />} label="Produtos" />{role === "mestre" && <><Nav active={section === "suggestions"} onClick={() => setSection("suggestions")} icon={<MessageSquareText size={17} />} label="Pendências" /><Nav active={section === "categories"} onClick={() => setSection("categories")} icon={<FileSpreadsheet size={17} />} label="Categorias" /><Nav active={section === "tabs"} onClick={() => setSection("tabs")} icon={<FileSpreadsheet size={17} />} label="Abas" /><Nav active={section === "home"} onClick={() => setSection("home")} icon={<Settings2 size={17} />} label="Home" /><Nav active={section === "appearance"} onClick={() => setSection("appearance")} icon={<Palette size={17} />} label="Aparência" /><Nav active={section === "notifications"} onClick={() => setSection("notifications")} icon={<Bell size={17} />} label="Notificações" /><Nav active={section === "pwa"} onClick={() => setSection("pwa")} icon={<Settings2 size={17} />} label="PWA" /><Nav active={section === "advanced"} onClick={() => setSection("advanced")} icon={<Database size={17} />} label="Avançado" /></>}</nav>
       <main className="nrd-management-content">{loading && !data.products.length ? <Loading text="Carregando painel..." /> : <>
         {role === "mestre" && section === "dashboard" && <Dashboard data={data} onOpen={setSection} />}
         {section === "products" && <Products products={data.products} categories={data.categories} refresh={refresh} />}
@@ -140,6 +141,7 @@ export default function ManagementPanel({ initiallyOpen = false, manageDrawerEnt
         {role === "mestre" && section === "home" && <HomeSettings settings={data.settings} refresh={refresh} />}
         {role === "mestre" && section === "appearance" && <Appearance settings={data.settings} refresh={refresh} />}
         {role === "mestre" && section === "notifications" && <Notifications settings={data.settings} refresh={refresh} />}
+        {role === "mestre" && section === "pwa" && <PwaSettings settings={data.settings} refresh={refresh} />}
         {role === "mestre" && section === "advanced" && <Advanced data={data} refresh={refresh} />}
       </>}</main>
     </>}
@@ -469,3 +471,24 @@ function Advanced({ data, refresh }: { data: ManagementData; refresh: (show?: bo
 
 function Switch({ label, value, set }: { label:string; value:boolean; set:(value:boolean)=>void }) { return <label className="nrd-management-switch-row"><span>{label}</span><input type="checkbox" checked={value} onChange={e=>set(e.target.checked)}/></label>; }
 function Pagination({ page,pages,total,setPage }: { page:number;pages:number;total:number;setPage:(page:number)=>void }) { return <div className="nrd-management-pagination"><button disabled={page<=0} onClick={()=>setPage(page-1)}>Anterior</button><span>Página {page+1} de {pages} · {total} itens</span><button disabled={page>=pages-1} onClick={()=>setPage(page+1)}>Próxima</button></div>; }
+
+function PwaSettings({ settings, refresh }: { settings: Record<string, unknown>; refresh: (show?: boolean) => Promise<void> }) {
+  const [draft, setDraft] = useState(() => pwaVisibilityFromRemote(settings));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setDraft(pwaVisibilityFromRemote(settings)), [settings]);
+  async function save() {
+    setSaving(true);
+    try {
+      await mergeAppSettings({ pwaShowPromotions: draft.promotions, pwaShowPriceConsultation: draft.priceConsultation });
+      toast.success("Opções do PWA salvas.");
+      await refresh();
+    } catch { toast.error("Não foi possível salvar as opções do PWA."); }
+    finally { setSaving(false); }
+  }
+  return <><Title title="PWA" description="Escolha as abas exibidas na versão web. Por padrão, ambas ficam ocultas." />
+    <div className="nrd-management-form-card">
+      <Switch label="Mostrar Promoções no PWA" value={draft.promotions} set={promotions => setDraft(current => ({ ...current, promotions }))} />
+      <Switch label="Mostrar Consultar Preços no PWA" value={draft.priceConsultation} set={priceConsultation => setDraft(current => ({ ...current, priceConsultation }))} />
+      <button className="nrd-management-primary" disabled={saving} onClick={() => void save()}><Save size={17} />{saving ? "Salvando..." : "Salvar opções do PWA"}</button>
+    </div></>;
+}

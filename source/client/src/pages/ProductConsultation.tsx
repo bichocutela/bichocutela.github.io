@@ -1,3 +1,4 @@
+import { barcodeSvgFor } from "@/lib/androidBarcode";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
@@ -400,24 +401,11 @@ function ProductDetail({ product, offers, queriedAt, busy, canAdd, onRefresh, on
 }
 
 function ProductBarcodeDialog({ product, onClose }: { product: ConsultationProduct; onClose: () => void }) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const barcodeValue = product.barcode || product.code;
+
+  const barcodeValue = (product.barcode || product.code).trim();
   const [profile, setProfile] = useState<"Padrão" | "Symbol" | "Datalogic">("Padrão");
   const [zoom, setZoom] = useState(100);
-  useEffect(() => {
-    let active = true;
-    void import("jsbarcode").then(({ default: JsBarcode }) => {
-      if (!active || !svgRef.current || !barcodeValue) return;
-      JsBarcode(svgRef.current, barcodeValue, {
-        format: "CODE128",
-        displayValue: false,
-        margin: 0,
-        width: profile === "Datalogic" ? 2.4 : profile === "Symbol" ? 2.2 : 2,
-        height: profile === "Datalogic" ? 120 : profile === "Symbol" ? 110 : 95,
-      });
-    }).catch(() => undefined);
-    return () => { active = false; };
-  }, [barcodeValue, profile]);
+  const barcodeSvg = barcodeSvgFor(barcodeValue, profile);
 
   return <div className="pc-modal-backdrop pc-barcode-backdrop" onMouseDown={onClose}>
     <section className="pc-barcode-dialog" role="dialog" aria-modal="true" aria-label="Código de barras" onMouseDown={(event) => event.stopPropagation()}>
@@ -425,11 +413,11 @@ function ProductBarcodeDialog({ product, onClose }: { product: ConsultationProdu
       <h2>{product.description}</h2>
       <strong className="pc-barcode-number">{barcodeValue}</strong>
       <span className="pc-barcode-category">{product.categories[0] || "Consulta de preços"}</span>
-      <div className="pc-barcode-image" style={{ transform: `scale(${zoom / 100})` }}><svg ref={svgRef} /></div>
+      <div className="pc-barcode-image" style={{ width: `${Math.min(100, zoom)}%` }} role="img" aria-label={`Código de barras ${barcodeValue}`} dangerouslySetInnerHTML={{ __html: barcodeSvg ?? "" }} />{!barcodeSvg && <span>Não foi possível gerar este código de barras.</span>}
       <span className="pc-barcode-caption">Código de barras / Referência</span>
       <div className="pc-barcode-profile-title"><Barcode size={20} /><strong>Perfil do Leitor</strong></div>
       <div className="pc-barcode-profiles">{(["Padrão", "Symbol", "Datalogic"] as const).map((item) => <button className={profile === item ? "active" : ""} key={item} onClick={() => setProfile(item)}>{item}</button>)}</div>
-      <div className="pc-barcode-zoom"><span>Ajuste de leitura</span><div><button onClick={() => setZoom((value) => Math.max(80, value - 10))}>−</button><strong>{zoom}%</strong><button onClick={() => setZoom((value) => Math.min(120, value + 10))}>+</button></div></div>
+      <div className="pc-barcode-zoom"><span>Ajuste de leitura</span><div><button onClick={() => setZoom((value) => Math.max(80, value - 10))}>−</button><strong>{zoom}%</strong><button onClick={() => setZoom((value) => Math.min(100, value + 10))}>+</button></div></div>
       <button className="pc-barcode-close" onClick={onClose}>FECHAR</button>
     </section>
   </div>;

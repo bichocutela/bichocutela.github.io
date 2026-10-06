@@ -7,6 +7,11 @@ on:
     paths:
       - "source/**"
       - ".github/workflows/deploy-pwa.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "source/**"
+      - ".github/workflows/deploy-pwa.yml"
   workflow_dispatch:
 
 permissions:
@@ -45,6 +50,9 @@ jobs:
       - name: Verificar TypeScript
         run: pnpm check
 
+      - name: Validar códigos de barras e opções do PWA
+        run: pnpm exec vitest run client/src/lib/androidBarcode.test.ts client/src/lib/pwaVisibility.test.ts
+
       - name: Gerar PWA
         env:
           VITE_SUPABASE_URL: https://kkayksyzksexoarpfxyj.supabase.co
@@ -52,6 +60,7 @@ jobs:
         run: pnpm exec vite build
 
       - name: Publicar arquivos gerados
+        if: github.event_name != 'pull_request'
         working-directory: .
         run: |
           cp source/dist/public/index.html index.html
