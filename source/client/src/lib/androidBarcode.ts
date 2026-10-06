@@ -21,7 +21,7 @@ const EAN_PARITY = ["LLLLLL", "LLGLGG", "LLGGLG", "LLGGGL", "LGLLGG", "LGGLLG", 
 export type ScannerProfile = "Padrão" | "Symbol" | "Datalogic";
 export function validEan13(value: string) {
   if (!/^[0-9]{13}$/.test(value)) return false;
-  const sum = [...value.slice(0, 12)].reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
+  const sum = value.slice(0, 12).split("").reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
   return (10 - sum % 10) % 10 === Number(value[12]);
 }
 function digitType(value: string, index: number): number {
@@ -42,7 +42,7 @@ function chooseCode(value: string, index: number, old: number): number {
   return 99;
 }
 export function code128Values(value: string): number[] | null {
-  if (!value || value.length > 80 || [...value].some(c => c.charCodeAt(0) > 127)) return null;
+  if (!value || value.length > 80 || value.split("").some(c => c.charCodeAt(0) > 127)) return null;
   const values: number[] = [];
   let code = 0;
   let position = 0;
@@ -74,7 +74,7 @@ export function barcodeBits(value: string): string | null {
     return bits + "101";
   }
   const values = code128Values(value);
-  return values?.map(number => [...CODE128_PATTERNS[number]].map((width, index) => (index % 2 === 0 ? "1" : "0").repeat(Number(width))).join("")).join("") ?? null;
+  return values?.map(number => CODE128_PATTERNS[number].split("").map((width, index) => (index % 2 === 0 ? "1" : "0").repeat(Number(width))).join("")).join("") ?? null;
 }
 export function barcodeLayout(value: string, profile: ScannerProfile = "Padrão") {
   const bits = barcodeBits(value);
@@ -91,6 +91,6 @@ export function barcodeSvgFor(value: string, profile: ScannerProfile = "Padrão"
   const layout = barcodeLayout(value, profile);
   if (!layout) return null;
   const { bits, scale, left, width, height } = layout;
-  const rects = [...bits].flatMap((bit, index) => bit === "1" ? [`<rect x="${left + index * scale}" y="0" width="${scale}" height="${height}" fill="#000"/>`] : []).join("");
+  const rects = bits.split("").flatMap((bit, index) => bit === "1" ? [`<rect x="${left + index * scale}" y="0" width="${scale}" height="${height}" fill="#000"/>`] : []).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/>${rects}</svg>`;
 }
