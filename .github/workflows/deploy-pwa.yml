@@ -51,7 +51,7 @@ jobs:
         run: pnpm check
 
       - name: Validar códigos de barras e opções do PWA
-        run: pnpm exec vitest run client/src/lib/androidBarcode.test.ts client/src/lib/pwaVisibility.test.ts
+        run: pnpm exec vitest run
 
       - name: Gerar PWA
         env:

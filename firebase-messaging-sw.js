@@ -14,7 +14,7 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 // Bump when the shell/service-worker contract changes so an old published
 // shell cannot mask the current PWA entry point after deployment.
-const CACHE_NAME = "nrd-codigos-shell-v13";
+const CACHE_NAME = "nrd-codigos-shell-v14";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",

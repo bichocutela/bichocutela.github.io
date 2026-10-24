@@ -146,7 +146,7 @@ async function applyAndroidValidity(
   }
 }
 
-function parseProduct(raw: unknown): ConsultationProduct | null {
+export function parseProduct(raw: unknown): ConsultationProduct | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as Record<string, unknown>;
   const description = text(item.description);
@@ -283,7 +283,7 @@ function secondUnit(base: number, percent: number) {
   return { second, average };
 }
 
-function baseOffers(product: ConsultationProduct): CommercialOffer[] {
+export function baseOffers(product: ConsultationProduct): CommercialOffer[] {
   const offers: CommercialOffer[] = [];
   if (hasCategory(product, "De-Por") && positive(product.previousValue) && positive(product.value) && product.previousValue! > product.value!) {
     offers.push({ family: "DE_POR", title: "De/Por", headline: "OFERTA", detail: `De ${money(product.previousValue!)} por ${money(product.value!)}.`, price: product.value, referencePrice: product.previousValue });
