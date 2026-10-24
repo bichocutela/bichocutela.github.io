@@ -123,7 +123,7 @@ const serveNavigation = async (_event, request) => {
   try {
     const response = await fetch(request, { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (response && response.ok) {
-      await cache.put("/", response.clone());
+      await cache.put("/", response.clone()).catch(() => undefined);
       return response;
     }
     return (await cache.match("/")) || response;
