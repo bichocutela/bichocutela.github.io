@@ -14,7 +14,7 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 // Bump when the shell/service-worker contract changes so an old published
 // shell cannot mask the current PWA entry point after deployment.
-const CACHE_NAME = "nrd-codigos-shell-v14";
+const CACHE_NAME = "nrd-codigos-shell-v15";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -117,26 +117,23 @@ const staleWhileRevalidate = async (event, request) => {
   return fresh || caches.match("/");
 };
 
-const serveNavigation = async (event, request) => {
+// Online navigation must open the current release, not yesterday's cached shell.
+const serveNavigation = async (_event, request) => {
   const cache = await caches.open(CACHE_NAME);
-  const cachedHome = await cache.match("/");
-  const network = fetch(request)
-    .then(async (response) => {
-      if (response && response.ok) await cache.put("/", response.clone());
+  try {
+    const response = await fetch(request, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    if (response && response.ok) {
+      await cache.put("/", response.clone());
       return response;
-    })
-    .catch(() => undefined);
-
-  if (cachedHome) {
-    event.waitUntil(network);
-    return cachedHome;
+    }
+    return (await cache.match("/")) || response;
+  } catch {
+    return (await cache.match("/")) || Response.error();
   }
-
-  return (await network) || Response.error();
 };
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL.map(url => new Request(url, { cache: "reload" })))));
   self.skipWaiting();
 });
 
