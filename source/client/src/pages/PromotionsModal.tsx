@@ -80,11 +80,14 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
       const next = await fetchPromotions(force);
       if ((nrdAuth.currentUser?.uid || "") !== uid) return;
       setResult(next);
+      setFocusedOffer(previous => previous && next.offers.some(offer => offer.id === previous.id) ? previous : null);
       setAccess(true);
       setStore(current =>
         next.stores.includes(current) ? current : next.stores[0] || ""
       );
     } catch (e) {
+      setResult(previous => previous ? {...previous, offers: previous.offers.filter(offer => offer.storeCode !== "0012")} : previous);
+      setFocusedOffer(null);
       setError(
         e instanceof Error
           ? e.message

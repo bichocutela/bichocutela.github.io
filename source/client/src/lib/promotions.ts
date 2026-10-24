@@ -216,7 +216,7 @@ async function load(force: boolean): Promise<PromotionResult> {
         warnings.push(`Não foi possível atualizar ${STORE_NAMES[code]}.`);
         result.set(
           code,
-          (previousByStore.get(code) ?? []).filter(o => active(o))
+          code === "0012" ? [] : (previousByStore.get(code) ?? []).filter(o => active(o))
         );
       }
     })

@@ -21,3 +21,22 @@ it('shares ACP snapshots, isolates document-store errors, validates complete pag
  config['0005'].enabled=false;
  const disabled=await fetchPromotions();expect(disabled.offers.every(o=>o.storeCode==='0012')).toBe(true);expect(disabled.stores).toEqual(['0012']);
 });
+
+ it('removes ACP withdrawals independently of dates and hides unconfirmed ACP offers on failure',async()=>{
+ vi.resetModules();remote.read.mockReset();remote.request.mockReset();
+ remote.read.mockImplementation(async path=>path==='config/promotion_stores'?{'0012':{enabled:true}}:{});
+ let phase='present';
+ remote.request.mockImplementation(async (_service,input)=>{
+  if(phase==='offline')throw Error('offline');
+  const present=phase==='present';
+  const revision=(present?'a':'c').repeat(64);
+  if(input.operation==='promotion_status')return {revision,count:present?1:0};
+  return {revision,count:present?1:0,removedIds:present?[]:['1'],items:present?[{id:'1',hash:'b'.repeat(64),item:{id:1,code:'1',description:'Arroz ACP',value:5,previousValue:10,startDate:'2020-01-01',endDate:'2099-12-31',productCategories:[{description:'De-Por'}]}}]:[]};
+ });
+ const {fetchPromotions}=await import('./promotions');
+ expect((await fetchPromotions()).offers).toHaveLength(1);
+ phase='removed';expect((await fetchPromotions()).offers).toHaveLength(0);
+ phase='present';expect((await fetchPromotions()).offers).toHaveLength(1);
+ phase='offline';await expect(fetchPromotions()).rejects.toThrow();
+ phase='removed';expect((await fetchPromotions()).offers).toHaveLength(0);
+ });
