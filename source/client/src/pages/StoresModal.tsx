@@ -16,6 +16,7 @@ import {
   type NrdStore,
   type OfficialOffer,
 } from "@/lib/stores";
+import StoreMap from "@/components/StoreMap";
 import OfferImage from "@/components/OfferImage";
 import { money } from "./PromotionsModal";
 import "./PromotionsModal.css";
@@ -85,7 +86,10 @@ export default function StoresModal({ onClose }: { onClose: () => void }) {
     setLoading(false);
     setError("");
     if (tab === "Ofertas") void loadOffers();
-    const refresh = () => { if (tab === "Ofertas" && document.visibilityState === "visible") void loadOffers(); };
+    const refresh = () => {
+      if (tab === "Ofertas" && document.visibilityState === "visible")
+        void loadOffers();
+    };
     const timer = setInterval(refresh, 60000);
     document.addEventListener("visibilitychange", refresh);
     return () => {
@@ -384,11 +388,11 @@ export default function StoresModal({ onClose }: { onClose: () => void }) {
                 </select>
                 {mapStore.address.latitude != null &&
                 mapStore.address.longitude != null ? (
-                  <iframe
-                    className="nrd-store-map"
-                    title={`Mapa de ${mapStore.name}`}
-                    loading="lazy"
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapStore.address.longitude - 0.015},${mapStore.address.latitude - 0.015},${mapStore.address.longitude + 0.015},${mapStore.address.latitude + 0.015}&layer=mapnik&marker=${mapStore.address.latitude},${mapStore.address.longitude}`}
+                  <StoreMap
+                    stores={sortedStores}
+                    selectedId={mapStore.id}
+                    position={location}
+                    onSelect={setSelected}
                   />
                 ) : (
                   <p>Coordenadas indisponíveis para esta loja.</p>
