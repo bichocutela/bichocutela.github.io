@@ -38,6 +38,8 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
     warnings: [],
     fetchedAt: "",
   });
+  const [focusedOffer, setFocusedOffer] = useState<PromotionOffer | null>(null);
+  const scrollArea = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [access, setAccess] = useState(false);
@@ -147,6 +149,16 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
       alive = false;
     };
   }, [store]);
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+  useEffect(() => {
+    scrollArea.current?.scrollTo({ top: 0 });
+  }, [category, family, store]);
   const items = useMemo(
     () =>
       result.offers.filter(
@@ -184,13 +196,27 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
     });
   }
   return (
-    <div className="nrd-modal-backdrop">
+    <div className="nrd-modal-backdrop nrd-promo-fullscreen-backdrop">
       <section
-        className="nrd-modal nrd-promo-modal nrd-android-promotions"
+        className={`nrd-modal nrd-promo-modal nrd-android-promotions nrd-promotions-native${category ? " is-category" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="Promoções"
       >
+        <nav className="nrd-promo-families" aria-label="Tipo de oferta">
+          {(["De/Por", "Leve e pague", "Clube"] as Family[]).map(value => (
+            <button
+              key={value}
+              aria-pressed={family === value}
+              onClick={() => {
+                setFamily(value);
+                setCategory("");
+              }}
+            >
+              {value}
+            </button>
+          ))}
+        </nav>
         <header>
           <button
             aria-label={category ? "Voltar para categorias" : "Voltar"}
@@ -199,7 +225,6 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
             <ArrowLeft />
           </button>
           <div>
-            <p>Promoções por loja</p>
             <h2>{category || "Promoções"}</h2>
           </div>
           <button
@@ -209,181 +234,259 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
           >
             <RefreshCw className={loading ? "is-spinning" : ""} />
           </button>
+          <button
+            className="nrd-promo-favorites-toggle"
+            aria-label="Mostrar promoções favoritas"
+            aria-pressed={favoritesOnly}
+            onClick={() => setFavoritesOnly(v => !v)}
+          >
+            <Heart fill={favoritesOnly ? "currentColor" : "none"} />
+          </button>
         </header>
-        {!access && !loading ? (
-          <>
-            <p className="nrd-promo-error" role="alert">
-              {error}
-            </p>
-            <NrdAccessForm onSuccess={() => void load()} />
-            <button onClick={() => void load()}>Tentar novamente</button>
-          </>
-        ) : (
-          <>
-            <nav className="nrd-promo-families" aria-label="Tipo de oferta">
-              {(["De/Por", "Leve e pague", "Clube"] as Family[]).map(value => (
-                <button
-                  key={value}
-                  aria-pressed={family === value}
-                  onClick={() => {
-                    setFamily(value);
-                    setCategory("");
-                  }}
-                >
-                  {value}
-                </button>
-              ))}
-            </nav>
-            <div className="nrd-promo-toolbar">
-              <div className="nrd-promo-store-control">
+        <div className="nrd-promo-scroll" ref={scrollArea}>
+          {!access && !loading ? (
+            <>
+              <p className="nrd-promo-error" role="alert">
+                {error}
+              </p>
+              <NrdAccessForm onSuccess={() => void load()} />
+              <button onClick={() => void load()}>Tentar novamente</button>
+            </>
+          ) : (
+            <>
+              <div className="nrd-promo-toolbar">
+                {!category && (
+                  <>
+                    <div className="nrd-promo-store-control">
+                      <select
+                        aria-label="Escolher loja"
+                        value={store}
+                        onChange={e => {
+                          setStore(e.target.value);
+                          setCategory("");
+                        }}
+                      >
+                        {result.stores.map(code => (
+                          <option key={code} value={code}>
+                            {storeLabelFor(code)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        aria-label="Favoritar loja"
+                        onClick={() => {
+                          const next = favoriteStore === store ? "" : store;
+                          setFavoriteStore(next);
+                          localStorage.setItem("nrd-pwa-favorite-store", next);
+                        }}
+                      >
+                        <Star
+                          fill={
+                            favoriteStore === store ? "currentColor" : "none"
+                          }
+                        />
+                      </button>
+                    </div>
+                  </>
+                )}
+                {category && (
+                  <>
+                    <button
+                      className="nrd-promo-category-back"
+                      onClick={() => setCategory("")}
+                    >
+                      <ArrowLeft size={16} /> Categorias
+                    </button>
+                    <strong className="nrd-promo-category-total">
+                      {category} · {visible.length}
+                    </strong>
+                  </>
+                )}
                 <select
-                  aria-label="Escolher loja"
-                  value={store}
-                  onChange={e => {
-                    setStore(e.target.value);
-                    setCategory("");
-                  }}
+                  aria-label="Ordenar promoções"
+                  value={sort}
+                  onChange={e => setSort(e.target.value as SortOption)}
                 >
-                  {result.stores.map(code => (
-                    <option key={code} value={code}>
-                      {storeLabelFor(code)}
+                  {SORTS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
                     </option>
                   ))}
                 </select>
+                <label>
+                  <Search size={18} />
+                  <input
+                    placeholder="Buscar produto ou código"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                  />
+                </label>
+              </div>
+              {loading && <p role="status">Atualizando promoções…</p>}
+              {error && (
+                <div className="nrd-promo-error" role="alert">
+                  {error}
+                  <button onClick={() => void load()}>Tentar novamente</button>
+                </div>
+              )}
+              {result.warnings.map(w => (
+                <p className="nrd-promo-error" key={w}>
+                  {w} Exibindo a última consulta válida, quando disponível.
+                </p>
+              ))}
+              <p className="nrd-promo-caption">
+                Filtrado por {storeNameFor(store)} · {items.length} oferta(s)
+              </p>
+              {!category && !query ? (
+                <div className="nrd-promo-category-sections">
+                  <div className="nrd-promo-overview-intro">
+                    <h3>Ofertas por categoria</h3>
+                    <p>
+                      Escolha uma categoria para ver todos os produtos em
+                      oferta.
+                    </p>
+                  </div>
+                  {categories.map(c => {
+                    const offers = sortOffers(
+                      items.filter(o => o.category === c),
+                      sort
+                    );
+                    return (
+                      <section className="nrd-promo-category-preview" key={c}>
+                        <div className="nrd-promo-category-heading">
+                          <div>
+                            <h3>{c}</h3>
+                            <p>{offers.length} produto(s) em oferta</p>
+                          </div>
+                          <button onClick={() => setCategory(c)}>
+                            Ver todos
+                          </button>
+                        </div>
+                        <div className="nrd-promo-preview-lane">
+                          {offers.slice(0, 3).map(offer => (
+                            <article
+                              key={offer.id}
+                              className="nrd-promo-preview-card"
+                            >
+                              <OfferImage
+                                images={
+                                  officialImages[offer.code] || offer.images
+                                }
+                                name={offer.name}
+                              />
+                              <button
+                                className="nrd-promo-preview-info"
+                                onClick={() => setFocusedOffer(offer)}
+                                aria-label={`Ver oferta de ${offer.name}`}
+                              >
+                                {discount(offer) > 0 && (
+                                  <span className="nrd-promo-preview-discount">
+                                    -{Math.round(discount(offer))}%
+                                  </span>
+                                )}
+                                <h4>{offer.name}</h4>
+                                <small>Código {offer.code}</small>
+                                <small>
+                                  EAN: {offer.barcode || "não informado"}
+                                </small>
+                                {offer.previous > offer.price && (
+                                  <del>De {money(offer.previous)}</del>
+                                )}
+                                <strong>
+                                  {money(offer.price)}
+                                  {offer.family === "Leve e pague" ? "/un" : ""}
+                                </strong>
+                              </button>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  <div className="nrd-promo-product-list">
+                    {visible.slice(0, limit).map(offer => (
+                      <PromotionCard
+                        key={offer.id}
+                        offer={offer}
+                        images={officialImages[offer.code] || offer.images}
+                        favorite={favorites.includes(offer.id)}
+                        onFavorite={() => toggleFavorite(offer.id)}
+                      />
+                    ))}
+                  </div>
+                  {limit < visible.length && (
+                    <button
+                      className="nrd-promo-primary"
+                      onClick={() => setLimit(v => v + 30)}
+                    >
+                      Mostrar mais · {visible.length - limit} restantes
+                    </button>
+                  )}
+                </>
+              )}
+              {!loading && !items.length && (
+                <div className="nrd-promo-state">
+                  <Tag />
+                  <strong>Nenhuma promoção encontrada</strong>
+                  <span>Altere a loja, o tipo de oferta ou a pesquisa.</span>
+                </div>
+              )}
+              {nrdAuth.currentUser && (
                 <button
-                  aria-label="Favoritar loja"
-                  onClick={() => {
-                    const next = favoriteStore === store ? "" : store;
-                    setFavoriteStore(next);
-                    localStorage.setItem("nrd-pwa-favorite-store", next);
+                  className="nrd-promo-logout"
+                  onClick={async () => {
+                    try {
+                      await releaseRemoteSession();
+                      await signOut(nrdAuth);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
                   }}
                 >
-                  <Star
-                    fill={favoriteStore === store ? "currentColor" : "none"}
-                  />
+                  Sair da conta NRD
                 </button>
-              </div>
-              <select
-                aria-label="Ordenar promoções"
-                value={sort}
-                onChange={e => setSort(e.target.value as SortOption)}
-              >
-                {SORTS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <label>
-                <Search size={18} />
-                <input
-                  placeholder="Buscar produto ou código"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                />
-              </label>
+              )}
+              {result.fetchedAt && (
+                <p className="nrd-promo-caption">
+                  Última consulta:{" "}
+                  {new Date(result.fetchedAt).toLocaleString("pt-BR", {
+                    timeZone: "America/Fortaleza",
+                  })}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+        {focusedOffer && (
+          <div
+            className="nrd-offer-detail-backdrop"
+            onClick={() => setFocusedOffer(null)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label="Detalhes da promoção"
+              onClick={e => e.stopPropagation()}
+            >
               <button
-                aria-pressed={favoritesOnly}
-                onClick={() => setFavoritesOnly(v => !v)}
+                className="nrd-promo-detail-close"
+                onClick={() => setFocusedOffer(null)}
               >
-                <Heart fill={favoritesOnly ? "currentColor" : "none"} />{" "}
-                Favoritas
+                Fechar
               </button>
-            </div>
-            {loading && <p role="status">Atualizando promoções…</p>}
-            {error && (
-              <div className="nrd-promo-error" role="alert">
-                {error}
-                <button onClick={() => void load()}>Tentar novamente</button>
-              </div>
-            )}
-            {result.warnings.map(w => (
-              <p className="nrd-promo-error" key={w}>
-                {w} Exibindo a última consulta válida, quando disponível.
-              </p>
-            ))}
-            <p className="nrd-promo-caption">
-              Filtrado por {storeNameFor(store)} · {items.length} oferta(s)
-            </p>
-            {!category && !query ? (
-              <div className="nrd-promo-category-list">
-                {categories.map(c => (
-                  <button
-                    className="nrd-promo-category-tile"
-                    key={c}
-                    onClick={() => setCategory(c)}
-                  >
-                    <Tag />
-                    <strong>{c}</strong>
-                    <span>
-                      {items.filter(o => o.category === c).length} ofertas
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <>
-                {category && (
-                  <button
-                    className="nrd-promo-category-back"
-                    onClick={() => setCategory("")}
-                  >
-                    <ArrowLeft size={16} /> Categorias · {category} ·{" "}
-                    {visible.length}
-                  </button>
-                )}
-                <div className="nrd-promo-product-list">
-                  {visible.slice(0, limit).map(offer => (
-                    <PromotionCard
-                      key={offer.id}
-                      offer={offer}
-                      images={officialImages[offer.code] || offer.images}
-                      favorite={favorites.includes(offer.id)}
-                      onFavorite={() => toggleFavorite(offer.id)}
-                    />
-                  ))}
-                </div>
-                {limit < visible.length && (
-                  <button
-                    className="nrd-promo-primary"
-                    onClick={() => setLimit(v => v + 30)}
-                  >
-                    Mostrar mais · {visible.length - limit} restantes
-                  </button>
-                )}
-              </>
-            )}
-            {!loading && !items.length && (
-              <div className="nrd-promo-state">
-                <Tag />
-                <strong>Nenhuma promoção encontrada</strong>
-                <span>Altere a loja, o tipo de oferta ou a pesquisa.</span>
-              </div>
-            )}
-            {nrdAuth.currentUser && (
-              <button
-                className="nrd-promo-logout"
-                onClick={async () => {
-                  try {
-                    await releaseRemoteSession();
-                    await signOut(nrdAuth);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              >
-                Sair da conta NRD
-              </button>
-            )}
-            {result.fetchedAt && (
-              <p className="nrd-promo-caption">
-                Última consulta:{" "}
-                {new Date(result.fetchedAt).toLocaleString("pt-BR", {
-                  timeZone: "America/Fortaleza",
-                })}
-              </p>
-            )}
-          </>
+              <PromotionCard
+                offer={focusedOffer}
+                images={
+                  officialImages[focusedOffer.code] || focusedOffer.images
+                }
+                favorite={favorites.includes(focusedOffer.id)}
+                onFavorite={() => toggleFavorite(focusedOffer.id)}
+              />
+            </section>
+          </div>
         )}
       </section>
     </div>
