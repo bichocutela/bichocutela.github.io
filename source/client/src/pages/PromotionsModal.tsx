@@ -73,6 +73,8 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
     if (running.current) return;
     running.current = true;
     setLoading(true);
+    setResult(previous => Date.now() - Date.parse(previous.fetchedAt) >= 60000
+      ? {...previous, offers: previous.offers.filter(offer => offer.storeCode !== "0012")} : previous);
     setError("");
     try {
       await nrdAuth.authStateReady();
