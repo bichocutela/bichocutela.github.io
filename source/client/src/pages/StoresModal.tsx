@@ -28,7 +28,9 @@ export default function StoresModal({ onClose }: { onClose: () => void }) {
     () => Number(localStorage.getItem(FAVORITE_STORE_KEY)) || 0
   );
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [storesLoading, setStoresLoading] = useState(true);
+  const [offersLoading, setOffersLoading] = useState(false);
+  const loading = tab === "Ofertas" ? offersLoading : storesLoading;
   const [error, setError] = useState("");
   const [offers, setOffers] = useState<OfficialOffer[]>([]);
   const [stale, setStale] = useState(false);
@@ -45,14 +47,14 @@ export default function StoresModal({ onClose }: { onClose: () => void }) {
   const [detail, setDetail] = useState<OfficialOffer | null>(null);
   const generation = useRef(0);
   async function loadStores() {
-    setLoading(true);
+    setStoresLoading(true);
     setError("");
     try {
       setStores(await fetchStores());
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      setStoresLoading(false);
     }
   }
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function StoresModal({ onClose }: { onClose: () => void }) {
   async function loadOffers() {
     if (!favorite) return;
     const id = ++generation.current;
-    setLoading(true);
+    setOffersLoading(true);
     setError("");
     try {
       const data = await fetchStoreOffers(favorite);
@@ -77,13 +79,13 @@ export default function StoresModal({ onClose }: { onClose: () => void }) {
     } catch (e) {
       if (generation.current === id) setError((e as Error).message);
     } finally {
-      if (generation.current === id) setLoading(false);
+      if (generation.current === id) setOffersLoading(false);
     }
   }
   useEffect(() => {
     setOffers([]);
     setFetchedAt("");
-    setLoading(false);
+    setOffersLoading(false);
     setError("");
     if (tab === "Ofertas") void loadOffers();
     const refresh = () => {
