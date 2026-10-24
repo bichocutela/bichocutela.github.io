@@ -1,3 +1,4 @@
+importScripts("/nrd-notification-policy.js");
 /* Firebase Web Push em segundo plano. A configuração é pública e corresponde ao app Web NRD Códigos PWA. */
 importScripts("https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/12.17.1/firebase-messaging-compat.js");
@@ -14,7 +15,7 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 // Bump when the shell/service-worker contract changes so an old published
 // shell cannot mask the current PWA entry point after deployment.
-const CACHE_NAME = "nrd-codigos-shell-v15";
+const CACHE_NAME = "nrd-codigos-shell-v16";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -24,7 +25,7 @@ const PREFERENCES_STORE = "settings";
 const PREFERENCES_KEY = "notifications";
 const HISTORY_DB = "nrd-pwa-notification-history";
 const HISTORY_STORE = "entries";
-const defaultPreferences = { enabled: true, productAdded: true, codeChanged: true };
+const defaultPreferences = globalThis.NrdNotificationPolicy.defaults;
 
 const openPreferences = () => new Promise((resolve, reject) => {
   const request = indexedDB.open(PREFERENCES_DB, 1);
@@ -64,16 +65,19 @@ const saveNotificationHistory = async (payload) => {
     request.onerror = () => reject(request.error);
   });
   const data = payload.data || {};
-  const entry = { id: payload.messageId || crypto.randomUUID(), title: payload.notification?.title || data.title || "NRD Códigos", body: payload.notification?.body || data.body || "Há uma atualização no catálogo.", type: data.type || "NEW_PRODUCT", productCode: data.productCode || "", url: data.url || "", receivedAt: Date.now(), read: false };
+  const entry = payload.__nrdEntry || { id: payload.messageId || crypto.randomUUID(), title: payload.notification?.title || data.title || "NRD Códigos", body: payload.notification?.body || data.body || "Há uma atualização no catálogo.", type: data.type || "NEW_PRODUCT", productCode: data.productCode || "", url: data.url || "", receivedAt: Date.now(), read: false };
+  let inserted = false;
   await new Promise((resolve, reject) => {
     const transaction = database.transaction(HISTORY_STORE, "readwrite");
-    transaction.objectStore(HISTORY_STORE).put(entry);
+    const store = transaction.objectStore(HISTORY_STORE);
+    const previous = store.get(entry.id);
+    previous.onsuccess = () => { if (!previous.result) { store.put(entry); inserted = true; } };
     transaction.oncomplete = resolve;
     transaction.onerror = () => reject(transaction.error);
   });
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
   windows.forEach((client) => client.postMessage({ type: "NRD_NOTIFICATION_UPDATED" }));
-  return entry;
+  return inserted ? entry : null;
 };
 
 const markNotificationAsRead = async (id) => {
@@ -171,17 +175,16 @@ self.addEventListener("fetch", (event) => {
 });
 
 messaging.onBackgroundMessage(async (payload) => {
-  const historyEntry = await saveNotificationHistory(payload).catch(() => undefined);
   const preferences = await readPreferences();
-  const type = payload.data?.type;
-  if (!preferences.enabled || (type === "NEW_PRODUCT" && !preferences.productAdded) || (type === "CODE_CHANGED" && !preferences.codeChanged)) return;
-  const title = payload.notification?.title || payload.data?.title || "NRD Códigos";
-  const body = payload.notification?.body || payload.data?.body || "Há uma atualização no catálogo.";
-  self.registration.showNotification(title, {
-    body,
-    icon: "/manus-storage/247858_40459510.png",
-    badge: "/manus-storage/247858_40459510.png",
-    data: { ...(payload.data || {}), notificationId: historyEntry?.id || payload.messageId || "" },
+  const entry = globalThis.NrdNotificationPolicy.content(payload, preferences);
+  if (!entry) return;
+  const saved = await saveNotificationHistory({ ...payload, __nrdEntry: entry }).catch(() => null);
+  if (!saved) return;
+  await self.registration.showNotification(entry.title, {
+    body: entry.body, tag: entry.id,
+    icon: "/manus-storage/nrd-icon-original-user_0cf71537.png",
+    badge: "/manus-storage/nrd-icon-original-user_0cf71537.png",
+    data: { ...(payload.data || {}), url: entry.url, notificationId: entry.id },
   });
 });
 

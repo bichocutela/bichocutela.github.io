@@ -1,3 +1,12 @@
+import {useDynamicPages,type DynamicPage} from "@/lib/dynamicPages";
+import { GraduationCap } from "lucide-react";
+import { useTraining } from "@/hooks/useTraining";
+import ProductThumbnail from "@/components/ProductThumbnail";
+import OfferImage from "@/components/OfferImage";
+import { BookOpen } from "lucide-react";
+import NotificationSettings from "@/components/NotificationSettings";
+import { listenForegroundNotifications } from "@/lib/notifications";
+import "./EncartesModal.css";
 import { MapPin } from "lucide-react";
 import { usePwaVisibility } from "@/contexts/PwaContext";
 import { useLocation } from "wouter";
@@ -24,6 +33,7 @@ import { toast } from "sonner";
 import { useNrdCatalog } from "@/hooks/useNrdData";
 import { copyCardAsImage } from "@/lib/copyCardImage";
 import {
+  notificationTypeLabel,
   listNotificationHistory,
   markAllNotificationsRead,
   markNotificationRead,
@@ -36,6 +46,9 @@ import {
   type ThemeKey,
 } from "@/lib/nrd";
 
+const DynamicPageModal = lazy(() => import("@/pages/DynamicPageModal"));
+const TrainingModal = lazy(() => import("@/pages/TrainingModal"));
+const EncartesModal = lazy(() => import("@/pages/EncartesModal"));
 const StoresModal = lazy(() => import("@/pages/StoresModal"));
 const PromotionsModal = lazy(() => import("@/pages/PromotionsModal"));
 
@@ -121,6 +134,13 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const publishedPages = useDynamicPages();
+  const [selectedPage,setSelectedPage] = useState<number|null>(null);
+  const trainingConfig = useTraining();
+  const [trainingOpen,setTrainingOpen] = useState(false);
+  const [initialTrainingId,setInitialTrainingId] = useState<string|undefined>();
+  const [encartesOpen, setEncartesOpen] = useState(false);
+  const [initialEncarteId, setInitialEncarteId] = useState<number | undefined>();
   const [storesOpen, setStoresOpen] = useState(false);
   const [promotionsOpen, setPromotionsOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
@@ -140,6 +160,12 @@ export default function Home() {
     return () => window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
   }, []);
 
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.has("treinamento")) {setInitialTrainingId(query.get("treinamento") || undefined);setTrainingOpen(true);}
+    if (query.has("encarte")) { setInitialEncarteId(Number(query.get("encarte")) || undefined); setEncartesOpen(true); }
+    if (query.has("promocoes")) setPromotionsOpen(true);
+  }, []);
   async function refreshNotifications() {
     try {
       setNotifications(await listNotificationHistory());
@@ -151,10 +177,14 @@ export default function Home() {
   useEffect(() => {
     void refreshNotifications();
     const update = () => void refreshNotifications();
+    const stopMessages = listenForegroundNotifications();
+    window.addEventListener("nrd-notification-history-updated", update);
     window.addEventListener("focus", update);
     document.addEventListener("visibilitychange", update);
     navigator.serviceWorker?.addEventListener("message", update);
     return () => {
+      stopMessages();
+      window.removeEventListener("nrd-notification-history-updated", update);
       window.removeEventListener("focus", update);
       document.removeEventListener("visibilitychange", update);
       navigator.serviceWorker?.removeEventListener("message", update);
@@ -226,6 +256,9 @@ export default function Home() {
 
   async function openNotification(notification: NrdNotification) {
     await markNotificationRead(notification.id);
+    if (notification.type === "NEW_TRAINING") {const url=new URL(notification.url,window.location.origin);setInitialTrainingId(url.searchParams.get("treinamento")||undefined);setTrainingOpen(true);setNotificationsOpen(false);return;}
+    if (notification.type === "NEW_ENCARTE") { const url = new URL(notification.url, window.location.origin);setInitialEncarteId(Number(url.searchParams.get("encarte")) || undefined);setEncartesOpen(true);setNotificationsOpen(false);return; }
+    if (["PROMOTION_UPDATED","PROMOTIONS_UPDATED"].includes(notification.type)) {setPromotionsOpen(true);setNotificationsOpen(false);return; }
     await refreshNotifications();
     const notificationTarget = normalizeSearch(notification.body);
     const product = products.find((item) => item.code === notification.productCode)
@@ -371,6 +404,11 @@ export default function Home() {
         categories={activeCategories}
         onClose={() => setDrawerOpen(false)}
         onOpenCategory={(category) => { setSelectedCategory(category); setDrawerOpen(false); }}
+        publishedPages={publishedPages}
+        onOpenPage={(id:number)=>{setSelectedPage(id);setDrawerOpen(false);}}
+        showTraining={!!trainingConfig}
+        onOpenTraining={() => {setTrainingOpen(true);setDrawerOpen(false);}}
+        onOpenEncartes={() => { setInitialEncarteId(undefined); setEncartesOpen(true); setDrawerOpen(false); }}
         onOpenStores={() => { setStoresOpen(true); setDrawerOpen(false); }}
         onOpenPromotions={() => { setPromotionsOpen(true); setDrawerOpen(false); }}
         onOpenSettings={() => { setSettingsOpen(true); setDrawerOpen(false); }}
@@ -384,6 +422,9 @@ export default function Home() {
       {installOpen && <InstallModal onInstall={installPwa} onClose={() => setInstallOpen(false)} />}
       {qrPlatform && <QrInstallModal platform={qrPlatform} onInstallPwa={installPwa} onClose={() => setQrPlatform(null)} />}
       {notificationsOpen && <NotificationsModal notifications={notifications} onOpen={openNotification} onReadAll={readAllNotifications} onClose={() => setNotificationsOpen(false)} />}
+      {selectedPage !== null && publishedPages.find(p=>p.id===selectedPage) && <Suspense fallback={null}><DynamicPageModal page={publishedPages.find(p=>p.id===selectedPage)!} onClose={()=>setSelectedPage(null)}/></Suspense>}
+      {trainingOpen && trainingConfig && <Suspense fallback={null}><TrainingModal key={trainingConfig.revision} config={trainingConfig} initialId={initialTrainingId} onClose={()=>setTrainingOpen(false)}/></Suspense>}
+      {encartesOpen && <Suspense fallback={null}><EncartesModal initialId={initialEncarteId} onClose={() => setEncartesOpen(false)} /></Suspense>}
       {storesOpen && <Suspense fallback={null}><StoresModal onClose={() => setStoresOpen(false)} /></Suspense>}
       {promotionsOpen && pwa.promotions && <Suspense fallback={null}><PromotionsModal onClose={() => setPromotionsOpen(false)} /></Suspense>}
     </main>
@@ -413,7 +454,7 @@ function ProductCard({ product, index, favorite, onOpen, onFavorite }: { product
   return <article className="nrd-product-card nrd-copyable-card" onContextMenu={copyCard}>
     <button className="nrd-product-card__main" onClick={() => onOpen(product)}>
       <span className="nrd-sector-line" style={{ backgroundColor: categoryColor(index) }} />
-      <span className="nrd-product-initial" style={{ backgroundColor: categoryColor(index) }}>{product.name.slice(0, 1).toUpperCase()}</span>
+      <ProductThumbnail code={product.code} name={product.name} imageUrl={product.imageUrl}/>
       <span className="nrd-product-copy"><strong>{product.name}</strong><small>{product.category.toUpperCase()} · {product.unit.toUpperCase()}</small></span>
       <span className="nrd-code-tag">{product.code}</span><ChevronRight size={18} />
     </button>
@@ -425,10 +466,10 @@ function EmptySearch({ onReset }: { onReset: () => void }) {
   return <div className="nrd-empty"><Search size={30} /><strong>Nenhum produto encontrado</strong><span>Tente parte do nome, a categoria ou confira o código.</span><button onClick={onReset}>Limpar busca</button></div>;
 }
 
-function NavigationDrawer({ categories, onClose, onOpenCategory, onOpenPromotions, onOpenStores, onOpenSettings, onInstallIphone, onInstallAndroid }: { categories: { id: string; name: string }[]; onClose: () => void; onOpenCategory: (category: string) => void; onOpenPromotions: () => void; onOpenStores: () => void; onOpenSettings: () => void; onInstallIphone: () => void; onInstallAndroid: () => void }) {
+function NavigationDrawer({ categories, onClose, onOpenCategory, onOpenPromotions, onOpenStores, onOpenEncartes, onOpenTraining, showTraining, publishedPages, onOpenPage, onOpenSettings, onInstallIphone, onInstallAndroid }: { categories: { id: string; name: string }[]; onClose: () => void; onOpenCategory: (category: string) => void; onOpenPromotions: () => void; onOpenStores: () => void; onOpenEncartes: () => void; onOpenTraining: () => void; showTraining: boolean; publishedPages: DynamicPage[]; onOpenPage: (id:number)=>void; onOpenSettings: () => void; onInstallIphone: () => void; onInstallAndroid: () => void }) {
   const pwa = usePwaVisibility();
   const [, navigate] = useLocation();
-  return <div className="nrd-overlay" role="presentation" onMouseDown={onClose}><aside className="nrd-drawer" role="dialog" aria-label="Navegação" onMouseDown={(event) => event.stopPropagation()}><header><img src={logoUrl} alt="" /><button onClick={onClose} aria-label="Fechar menu"><X /></button></header><p className="nrd-drawer-eyebrow">Navegação</p><button className="nrd-drawer-link" onClick={onClose}><Monitor size={17} /> Início</button>{categories.map((category) => <button key={category.id} className="nrd-drawer-link" onClick={() => onOpenCategory(category.name)}><span className="nrd-drawer-dot" />{category.name}<ChevronRight size={15} /></button>)}<div className="nrd-drawer-divider" />{pwa.promotions && <button className="nrd-drawer-link" onClick={onOpenPromotions}><Tags size={17} /> Promoções<ChevronRight size={15} /></button>}{pwa.priceConsultation && <button className="nrd-drawer-link" onClick={() => { onClose(); navigate("/consultar-produtos"); }}><Search size={17} /> Consultar Preços<ChevronRight size={15} /></button>}<button className="nrd-drawer-link" onClick={onOpenSettings}><Settings2 size={17} /> Configurações</button><button className="nrd-drawer-link" onClick={onOpenStores}><MapPin size={17} /> Nossas Lojas<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallIphone}><Apple size={17} /> Instalar via iPhone<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallAndroid}><Smartphone size={17} /> Instalar via Android<ChevronRight size={15} /></button></aside></div>;
+  return <div className="nrd-overlay" role="presentation" onMouseDown={onClose}><aside className="nrd-drawer" role="dialog" aria-label="Navegação" onMouseDown={(event) => event.stopPropagation()}><header><img src={logoUrl} alt="" /><button onClick={onClose} aria-label="Fechar menu"><X /></button></header><p className="nrd-drawer-eyebrow">Navegação</p><button className="nrd-drawer-link" onClick={onClose}><Monitor size={17} /> Início</button>{showTraining && <button className="nrd-drawer-link" onClick={onOpenTraining}><GraduationCap size={17}/> Treinamento<ChevronRight size={15}/></button>}{publishedPages.map(page=><button key={`page-${page.id}`} className="nrd-drawer-link" onClick={()=>onOpenPage(page.id)}><BookOpen size={17}/>{page.title}<ChevronRight size={15}/></button>)}{categories.map((category) => <button key={category.id} className="nrd-drawer-link" onClick={() => onOpenCategory(category.name)}><span className="nrd-drawer-dot" />{category.name}<ChevronRight size={15} /></button>)}<div className="nrd-drawer-divider" />{pwa.promotions && <button className="nrd-drawer-link" onClick={onOpenPromotions}><Tags size={17} /> Promoções<ChevronRight size={15} /></button>}{pwa.priceConsultation && <button className="nrd-drawer-link" onClick={() => { onClose(); navigate("/consultar-produtos"); }}><Search size={17} /> Consultar Preços<ChevronRight size={15} /></button>}<button className="nrd-drawer-link" onClick={onOpenEncartes}><BookOpen size={17}/> Encartes<ChevronRight size={15}/></button><button className="nrd-drawer-link" onClick={onOpenSettings}><Settings2 size={17} /> Configurações</button><button className="nrd-drawer-link" onClick={onOpenStores}><MapPin size={17} /> Nossas Lojas<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallIphone}><Apple size={17} /> Instalar via iPhone<ChevronRight size={15} /></button><button className="nrd-drawer-link nrd-drawer-link--install" onClick={onInstallAndroid}><Smartphone size={17} /> Instalar via Android<ChevronRight size={15} /></button></aside></div>;
 }
 
 function ProductModal({ title, products, favorites, onClose, onOpen, onFavorite }: { title: string; products: Product[]; favorites: string[]; onClose: () => void; onOpen: (product: Product) => void; onFavorite: (code: string) => void }) {
@@ -436,11 +477,11 @@ function ProductModal({ title, products, favorites, onClose, onOpen, onFavorite 
 }
 
 function ProductDetail({ product, favorite, onClose, onFavorite }: { product: Product; favorite: boolean; onClose: () => void; onFavorite: (code: string) => void }) {
-  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--detail" role="dialog" aria-modal="true" aria-label={product.name} onMouseDown={(event) => event.stopPropagation()}><button className="nrd-modal-close" onClick={onClose} aria-label="Fechar"><X /></button><p className="nrd-detail-eyebrow">{product.category} · {product.unit}</p><h2>{product.name}</h2>{product.imageUrl && <img className="nrd-product-image" src={product.imageUrl} alt="" />}<div className="nrd-barcode"><span>código do produto</span><strong>{product.code}</strong><i>{Array.from(product.code).map((digit, index) => <b key={`${digit}-${index}`} style={{ width: `${2 + (Number(digit) % 4)}px` }} />)}</i></div><button className="nrd-detail-favorite" onClick={() => onFavorite(product.code)}><Heart size={18} fill={favorite ? "currentColor" : "none"} /> {favorite ? "Remover dos favoritos" : "Salvar nos favoritos"}</button><small>Última atualização: {formatTime(product.timestamp)}</small></section></div>;
+  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--detail" role="dialog" aria-modal="true" aria-label={product.name} onMouseDown={(event) => event.stopPropagation()}><button className="nrd-modal-close" onClick={onClose} aria-label="Fechar"><X /></button><p className="nrd-detail-eyebrow">{product.category} · {product.unit}</p><h2>{product.name}</h2><OfferImage images={product.imageUrl?[product.imageUrl]:[]} code={product.code} name={product.name}/><div className="nrd-barcode"><span>código do produto</span><strong>{product.code}</strong><i>{Array.from(product.code).map((digit, index) => <b key={`${digit}-${index}`} style={{ width: `${2 + (Number(digit) % 4)}px` }} />)}</i></div><button className="nrd-detail-favorite" onClick={() => onFavorite(product.code)}><Heart size={18} fill={favorite ? "currentColor" : "none"} /> {favorite ? "Remover dos favoritos" : "Salvar nos favoritos"}</button><small>Última atualização: {formatTime(product.timestamp)}</small></section></div>;
 }
 
 function PreferencesModal({ preferences, onChange, onClose }: { preferences: LocalPreferences; onChange: (value: LocalPreferences) => void; onClose: () => void }) {
-  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--preferences" role="dialog" aria-modal="true" aria-label="Configurações" onMouseDown={(event) => event.stopPropagation()}><header><div><p>Preferências deste dispositivo</p><h2>Configurações</h2></div><button onClick={onClose} aria-label="Fechar"><X /></button></header><div className="nrd-preference-block"><p className="nrd-setting-title">Modo de aparência</p><div className="nrd-choice-row">{(["system", "light", "dark"] as const).map((mode) => <button key={mode} className={preferences.mode === mode ? "is-selected" : ""} onClick={() => onChange({ ...preferences, mode })}>{mode === "system" ? "Sistema" : mode === "light" ? "Claro" : "Escuro"}{preferences.mode === mode && <Check size={15} />}</button>)}</div></div><div className="nrd-preference-block"><p className="nrd-setting-title">Tema do aplicativo</p><small className="nrd-local-theme-note">O tema é uma preferência deste dispositivo. O fundo publicado pelo Mestre será aplicado automaticamente ao tema escolhido.</small><div className="nrd-theme-options">{themeOptions.map((theme) => <button key={theme.key} aria-label={`Tema ${theme.label}`} title={theme.label} className={preferences.theme === theme.key ? "is-selected" : ""} onClick={() => onChange({ ...preferences, theme: theme.key })} style={{ "--swatch": theme.color } as React.CSSProperties}><span />{preferences.theme === theme.key && <Check size={13} />}</button>)}</div><div className="nrd-theme-label">{themeOptions.find((item) => item.key === preferences.theme)?.label}</div></div><div className="nrd-preference-block"><p className="nrd-setting-title">Tamanho das letras</p><div className="nrd-choice-row">{(["small", "default", "large"] as const).map((scale) => <button key={scale} className={preferences.fontScale === scale ? "is-selected" : ""} onClick={() => onChange({ ...preferences, fontScale: scale })}>{scale === "small" ? "Pequeno" : scale === "default" ? "Padrão" : "Grande"}{preferences.fontScale === scale && <Check size={15} />}</button>)}</div></div><div className="nrd-preference-block nrd-preference-block--hint"><Bell size={18} /><div><strong>Avisos no dispositivo</strong><p>As permissões de notificação continuam sob controle do navegador.</p></div></div></section></div>;
+  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--preferences" role="dialog" aria-modal="true" aria-label="Configurações" onMouseDown={(event) => event.stopPropagation()}><header><div><p>Preferências deste dispositivo</p><h2>Configurações</h2></div><button onClick={onClose} aria-label="Fechar"><X /></button></header><div className="nrd-preference-block"><p className="nrd-setting-title">Modo de aparência</p><div className="nrd-choice-row">{(["system", "light", "dark"] as const).map((mode) => <button key={mode} className={preferences.mode === mode ? "is-selected" : ""} onClick={() => onChange({ ...preferences, mode })}>{mode === "system" ? "Sistema" : mode === "light" ? "Claro" : "Escuro"}{preferences.mode === mode && <Check size={15} />}</button>)}</div></div><div className="nrd-preference-block"><p className="nrd-setting-title">Tema do aplicativo</p><small className="nrd-local-theme-note">O tema é uma preferência deste dispositivo. O fundo publicado pelo Mestre será aplicado automaticamente ao tema escolhido.</small><div className="nrd-theme-options">{themeOptions.map((theme) => <button key={theme.key} aria-label={`Tema ${theme.label}`} title={theme.label} className={preferences.theme === theme.key ? "is-selected" : ""} onClick={() => onChange({ ...preferences, theme: theme.key })} style={{ "--swatch": theme.color } as React.CSSProperties}><span />{preferences.theme === theme.key && <Check size={13} />}</button>)}</div><div className="nrd-theme-label">{themeOptions.find((item) => item.key === preferences.theme)?.label}</div></div><div className="nrd-preference-block"><p className="nrd-setting-title">Tamanho das letras</p><div className="nrd-choice-row">{(["small", "default", "large"] as const).map((scale) => <button key={scale} className={preferences.fontScale === scale ? "is-selected" : ""} onClick={() => onChange({ ...preferences, fontScale: scale })}>{scale === "small" ? "Pequeno" : scale === "default" ? "Padrão" : "Grande"}{preferences.fontScale === scale && <Check size={15} />}</button>)}</div></div><div className="nrd-preference-block"><NotificationSettings/></div><div className="nrd-preference-block nrd-preference-block--hint"><Bell size={18} /><div><strong>Avisos no dispositivo</strong><p>As permissões de notificação continuam sob controle do navegador.</p></div></div></section></div>;
 }
 
 function InstallModal({ onInstall, onClose }: { onInstall: () => void; onClose: () => void }) {
@@ -459,7 +500,7 @@ function QrInstallModal({ platform, onInstallPwa, onClose }: { platform: "iphone
 }
 
 function NotificationsModal({ notifications, onOpen, onReadAll, onClose }: { notifications: NrdNotification[]; onOpen: (notification: NrdNotification) => void; onReadAll: () => void; onClose: () => void }) {
-  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--notifications" role="dialog" aria-modal="true" aria-label="Notificações" onMouseDown={(event) => event.stopPropagation()}><header><div><p>Central de avisos</p><h2>Notificações</h2></div><button onClick={onClose} aria-label="Fechar"><X /></button></header><div className="nrd-notification-toolbar"><span>{notifications.filter((item) => !item.read).length} não lida{notifications.filter((item) => !item.read).length === 1 ? "" : "s"}</span>{notifications.some((item) => !item.read) && <button onClick={onReadAll}>Marcar todas como lidas</button>}</div>{notifications.length ? <div className="nrd-notification-list">{notifications.map((notification) => <button key={notification.id} className={`nrd-notification-item ${notification.read ? "is-read" : "is-unread"}`} onClick={() => onOpen(notification)}><span className="nrd-notification-dot" /><span className="nrd-notification-copy"><strong>{notification.title}</strong><span>{notification.body}</span><small>{notification.type === "CODE_CHANGED" ? "CÓDIGO ALTERADO" : "NOVO PRODUTO"} · {formatNotificationTime(notification.receivedAt)}</small></span><ChevronRight size={18} /></button>)}</div> : <div className="nrd-notification-empty"><Bell size={32} /><strong>Você está em dia</strong><span>Nenhuma notificação recebida neste dispositivo.</span></div>}</section></div>;
+  return <div className="nrd-modal-backdrop" role="presentation" onMouseDown={onClose}><section className="nrd-modal nrd-modal--notifications" role="dialog" aria-modal="true" aria-label="Notificações" onMouseDown={(event) => event.stopPropagation()}><header><div><p>Central de avisos</p><h2>Notificações</h2></div><button onClick={onClose} aria-label="Fechar"><X /></button></header><div className="nrd-notification-toolbar"><span>{notifications.filter((item) => !item.read).length} não lida{notifications.filter((item) => !item.read).length === 1 ? "" : "s"}</span>{notifications.some((item) => !item.read) && <button onClick={onReadAll}>Marcar todas como lidas</button>}</div>{notifications.length ? <div className="nrd-notification-list">{notifications.map((notification) => <button key={notification.id} className={`nrd-notification-item ${notification.read ? "is-read" : "is-unread"}`} onClick={() => onOpen(notification)}><span className="nrd-notification-dot" /><span className="nrd-notification-copy"><strong>{notification.title}</strong><span>{notification.body}</span><small>{notificationTypeLabel(notification.type)} · {formatNotificationTime(notification.receivedAt)}</small></span><ChevronRight size={18} /></button>)}</div> : <div className="nrd-notification-empty"><Bell size={32} /><strong>Você está em dia</strong><span>Nenhuma notificação recebida neste dispositivo.</span></div>}</section></div>;
 }
 
 function formatNotificationTime(value: number) {

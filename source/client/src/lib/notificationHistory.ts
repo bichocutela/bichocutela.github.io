@@ -76,3 +76,10 @@ export async function markAllNotificationsRead() {
     transaction.onerror = () => reject(transaction.error);
   });
 }
+
+/** Deduplicate across foreground/background delivery and preserve the existing read state. */
+export async function recordNotification(entry: NrdNotification): Promise<boolean> {
+ const database=await openNotificationDatabase();
+ return new Promise((resolve,reject)=>{let inserted=false;const tx=database.transaction(STORE_NAME,'readwrite');const store=tx.objectStore(STORE_NAME);const req=store.get(entry.id);req.onsuccess=()=>{if(!req.result){store.put(entry);inserted=true;}};tx.oncomplete=()=>{database.close();window.dispatchEvent(new Event('nrd-notification-history-updated'));resolve(inserted);};tx.onerror=()=>reject(tx.error);});
+}
+export function notificationTypeLabel(type:string){return ({NEW_PRODUCT:'NOVO PRODUTO',CODE_CHANGED:'CÓDIGO ALTERADO',SUGGESTION_FIXED:'SUGESTÃO CORRIGIDA',APP_UPDATE:'ATUALIZAÇÃO DO APLICATIVO',PROMOTIONS_UPDATED:'PROMOÇÕES ATUALIZADAS',PROMOTION_UPDATED:'PROMOÇÕES ATUALIZADAS',NEW_ENCARTE:'NOVO ENCARTE',NEW_TRAINING:'NOVO TREINAMENTO'} as Record<string,string>)[type]||'AVISO';}

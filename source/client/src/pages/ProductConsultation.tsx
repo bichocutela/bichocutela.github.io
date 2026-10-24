@@ -1,3 +1,5 @@
+import ProductThumbnail from "@/components/ProductThumbnail";
+import OfferImage from "@/components/OfferImage";
 import { barcodeSvgFor } from "@/lib/androidBarcode";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
@@ -335,13 +337,13 @@ function ProductResultCard({ product, validityDocument, onOpen }: { product: Con
   }
 
   return <button className={`pc-product-card pc-copyable-card${featured ? " pc-product-card--promo" : ""}`} onClick={onOpen} onContextMenu={copyCard}>
-    <div className="pc-product-copy">
+    <span className="pc-product-identity"><ProductThumbnail code={product.code} barcode={product.barcode} name={product.description}/><div className="pc-product-copy">
       <strong>{product.description}</strong>
       <span>Código: {product.code || "não informado"}{product.barcode ? ` · EAN: ${product.barcode}` : ""}</span>
       <small>{product.categories.length ? product.categories.join(" · ") : "Varejo"}</small>
       {featured && <div className="pc-promo-badge">OFERTA</div>}
     </div>
-    <div className="pc-product-price">
+    </span><div className="pc-product-price">
       {featured ? <>
         <span className="pc-promo-title">{featured.title}</span>
         {featured.referencePrice != null && featured.price != null && featured.referencePrice > featured.price && <small className="pc-result-old-price">De {formatMoney(featured.referencePrice)}</small>}
@@ -370,7 +372,7 @@ function ProductDetail({ product, offers, queriedAt, busy, canAdd, onRefresh, on
   return <>
   <div className="pc-modal-backdrop" onMouseDown={onClose}><section className="pc-detail" role="dialog" aria-modal="true" aria-label={product.description} onMouseDown={(event) => event.stopPropagation()}>
     <button className="pc-detail-close" onClick={onClose} aria-label="Fechar"><X /></button>
-    <h2>{product.description}</h2>
+    <h2>{product.description}</h2><OfferImage images={[]} code={product.code} barcode={product.barcode} name={product.description}/>
     <p className="pc-consulted">Consultado em {formatConsultedAt(queriedAt)}</p>
     <div className="pc-detail-actions">
       <button onClick={onRefresh} disabled={busy}><RefreshCw className={busy ? "is-spinning" : ""} size={17} /> Atualizar preços</button>

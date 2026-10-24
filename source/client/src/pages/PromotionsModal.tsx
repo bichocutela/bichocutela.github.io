@@ -372,7 +372,7 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
                                 images={
                                   officialImages[offer.code] || offer.images
                                 }
-                                name={offer.name}
+                                name={offer.name} code={offer.code} barcode={offer.barcode}
                               />
                               <button
                                 className="nrd-promo-preview-info"
@@ -506,7 +506,7 @@ function PromotionCard({
   const [expanded, setExpanded] = useState(false);
   return (
     <article className="nrd-promo-card nrd-promo-product">
-      <OfferImage images={images} name={offer.name} />
+      <OfferImage images={images} name={offer.name} code={offer.code} barcode={offer.barcode} />
       <div className="nrd-promo-card__body">
         <div className="nrd-offer-badges">
           {discount(offer) > 0 && <span>-{Math.round(discount(offer))}%</span>}

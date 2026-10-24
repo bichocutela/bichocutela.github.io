@@ -308,7 +308,7 @@ export default function StoresModal({ onClose }: { onClose: () => void }) {
                     images={
                       o.images?.length ? o.images : o.image ? [o.image] : []
                     }
-                    name={o.description}
+                    name={o.description} code={o.code}
                   />
                   {o.showPrice && (
                     <div className="nrd-promo-price">
@@ -489,7 +489,7 @@ export default function StoresModal({ onClose }: { onClose: () => void }) {
               <h2>{detail.description}</h2>
               <OfferImage
                 images={detail.images || []}
-                name={detail.description}
+                name={detail.description} code={detail.code}
               />
               {detail.showPrice && <h3>{money(detail.priceCents / 100)}</h3>}
               <strong>{detail.cashback}</strong>

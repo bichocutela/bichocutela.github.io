@@ -5,7 +5,7 @@ const source=readFileSync(new URL('../../../../firebase-messaging-sw.js',import.
 function worker(fetcher:any, cacheFull=false){
  const put=vi.fn(async()=>{if(cacheFull)throw Error('quota');});const cached=new Response('old-release');
  const context:any={self:{addEventListener:vi.fn()},firebase:{initializeApp:vi.fn(),messaging:()=>({onBackgroundMessage:vi.fn()})},importScripts:vi.fn(),caches:{open:async()=>({put,match:async()=>cached})},fetch:fetcher,AbortSignal,Response};
- vm.runInNewContext(source+'\n globalThis.navigate = serveNavigation;',context);
+ vm.runInNewContext("globalThis.NrdNotificationPolicy={defaults:{}};\n"+source+'\n globalThis.navigate = serveNavigation;',context);
  return {navigate:context.navigate,put};
 }
 it('opens the current online release even when an old shell is cached',async()=>{

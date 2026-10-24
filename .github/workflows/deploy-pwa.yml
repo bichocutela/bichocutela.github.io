@@ -64,10 +64,11 @@ jobs:
         working-directory: .
         run: |
           cp source/dist/public/index.html index.html
+          cp source/client/public/nrd-notification-policy.js nrd-notification-policy.js
           cp -R source/dist/public/assets/. assets/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html assets/
+          git add index.html assets/ nrd-notification-policy.js
           if git diff --cached --quiet; then
             echo "Nenhuma alteração gerada."
           else
