@@ -39,6 +39,9 @@ export default function PromotionsModal({ onClose }: { onClose: () => void }) {
     fetchedAt: "",
   });
   const [focusedOffer, setFocusedOffer] = useState<PromotionOffer | null>(null);
+  useEffect(() => {
+    setFocusedOffer(previous => previous ? result.offers.find(offer => offer.id === previous.id) ?? null : null);
+  }, [result.offers]);
   const scrollArea = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
