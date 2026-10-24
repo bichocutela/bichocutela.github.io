@@ -34,3 +34,14 @@ O PWA preserva dados do catálogo no Firestore e prefere configurações remotas
 - Acesso restrito usa a conta NRD/Firebase e a mesma sessão por dispositivo do Android. As permissões do Mestre continuam sendo verificadas no servidor. Preferências pessoais permanecem locais.
 
 Validação: `pnpm check`, `pnpm exec vitest run`, `pnpm exec vite build`. Testes cobrem sincronização ACP por revisão, publicação completa, falha isolada por loja, loja desabilitada, datas e ordenação.
+
+## Encartes, avisos e conteúdo publicado
+
+- Encartes consulta a mesma fonte `nrd-encartes` do Android e mantém apenas edições vigentes de Natal e região. O leitor tem páginas, zoom e gestos; a rota de PDF aceita somente IDs ativos do catálogo oficial, pois o servidor original não libera CORS.
+- Configurações e sinos de Encartes/Treinamento salvam as preferências deste navegador. Há inscrição FCM confirmada no servidor, filtros antes do histórico, deduplicação e links que abrem o conteúdo correspondente. Encartes oferece Desativadas, Simples e Detalhadas. Treinamentos de teste não são anunciados ao público.
+- Recebimento em segundo plano exige permissão de notificações; no iOS, exige instalação na Tela de Início e suporte do sistema. Os testes automatizados não enviam avisos a usuários reais.
+- Treinamento lê a configuração publicada no Firestore e respeita OFF/TEST/ALL e a identidade Mestre. Aprender inclui atendimento simulado, visor do cliente ampliável e teclado remoto; Prova e Caixa Livre usam as missões publicadas. Dados de prática não são enviados a serviços de CPF, pagamento ou SMS.
+- Páginas/Cursos leem `dynamic_tabs`, com os mesmos blocos, ordem, habilitação e período do Android. O PWA não oferece os editores nativos desses módulos.
+- Fotos oficiais recebidas continuam prioritárias. Quando faltam, `nrd-product-image` busca uma associação verificada por código/EAN/descrição no catálogo oficial, em segundo plano e com fila limitada. Sem correspondência, não inventa uma imagem.
+
+Validação desta etapa: 30 testes do PWA, tipos e build; 118 testes dos serviços envolvidos. No navegador publicado foram conferidos os quatro encartes vigentes, abertura de um PDF com dez páginas, navegação/zoom, modos do sino, missões remotas, teclado simulado e visor ampliável. Entrega real de push não foi disparada em produção. Essa etapa não afirma equivalência de todas as rotinas privadas e telas administrativas nativas.
