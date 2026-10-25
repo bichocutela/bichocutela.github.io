@@ -11,7 +11,7 @@ import { MapPin } from "lucide-react";
 import { usePwaVisibility } from "@/contexts/PwaContext";
 import { useLocation } from "wouter";
 /** Catálogo em Movimento: wayfinding de varejo, foco na consulta e contraste garantido. */
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Apple,
   Bell,
@@ -126,6 +126,7 @@ function formatTime(value?: number) {
 }
 
 export default function Home() {
+  const categoryStripRef = useRef<HTMLDivElement>(null);
   const pwa = usePwaVisibility();
   const { products, settings, categories, catalogReady, error } = useNrdCatalog();
   const [preferences, setPreferences] = useStoredState<LocalPreferences>("nrd-pwa-preferences-v2", initialPreferences);
@@ -359,7 +360,25 @@ export default function Home() {
           <>
             {settings.showCategories && <section aria-labelledby="categories-title" className="nrd-section">
               <SectionHeading eyebrow="Catálogo oficial" title="Encontre sem perder tempo" trailing={`${products.length.toLocaleString("pt-BR")} itens`} />
-              <div className="nrd-category-strip">
+              <div
+                ref={categoryStripRef}
+                className="nrd-category-strip"
+                onTouchStart={(event) => {
+                  const strip = categoryStripRef.current;
+                  if (strip) strip.dataset.touchX = String(event.touches[0]?.clientX ?? 0);
+                }}
+                onTouchMove={(event) => {
+                  const strip = categoryStripRef.current;
+                  const touch = event.touches[0];
+                  if (!strip || !touch) return;
+                  const previousX = Number(strip.dataset.touchX ?? touch.clientX);
+                  strip.scrollLeft += previousX - touch.clientX;
+                  strip.dataset.touchX = String(touch.clientX);
+                }}
+                onTouchEnd={() => {
+                  if (categoryStripRef.current) delete categoryStripRef.current.dataset.touchX;
+                }}
+              >
                 {activeCategories.map((category, index) => (
                   <button key={category.id} onClick={() => setSelectedCategory(category.name)} className="nrd-category" style={{ "--sector": categoryColor(index) } as React.CSSProperties}>
                     <span />{category.name}
